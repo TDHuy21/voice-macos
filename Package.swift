@@ -26,11 +26,6 @@ let package = Package(
             dependencies: ["Core", "Engine"],
             path: "Sources/UI"
         ),
-        .target(
-            name: "HALPlugin",
-            dependencies: [],
-            path: "Sources/HALPlugin"
-        ),
         .executableTarget(
             name: "SoundsSource",
             dependencies: ["Core", "Engine", "UI"],
