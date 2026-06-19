@@ -33,7 +33,15 @@ public class AppAudioNode: @unchecked Sendable {
         // Setup converter if formats differ
         var dstFormat = engineFormat.streamDescription.pointee
         var srcFormat = sourceFormat
-        
+
+        func dump(_ label: String, _ f: AudioStreamBasicDescription) -> String {
+            let ni = (f.mFormatFlags & kAudioFormatFlagIsNonInterleaved) != 0
+            let fl = (f.mFormatFlags & kAudioFormatFlagIsFloat) != 0
+            return "\(label): \(f.mSampleRate)Hz ch=\(f.mChannelsPerFrame) bpf=\(f.mBytesPerFrame) bits=\(f.mBitsPerChannel) \(fl ? "float" : "int") \(ni ? "non-interleaved" : "interleaved") flags=\(f.mFormatFlags)"
+        }
+        print("AppAudioNode: \(dump("SRC(tap)", srcFormat))")
+        print("AppAudioNode: \(dump("DST(engine)", dstFormat))")
+
         let sampleRateMatch = abs(srcFormat.mSampleRate - dstFormat.mSampleRate) < 0.01
         let channelMatch = srcFormat.mChannelsPerFrame == dstFormat.mChannelsPerFrame
         let formatFlagsMatch = (srcFormat.mFormatFlags & kAudioFormatFlagIsNonInterleaved) == (dstFormat.mFormatFlags & kAudioFormatFlagIsNonInterleaved)
@@ -60,8 +68,17 @@ public class AppAudioNode: @unchecked Sendable {
         let localBuffers = self.ringBuffers
         let bytesPerFrame = Int(dstFormat.mBytesPerFrame)
         
+        let usesConverter = (self.converter != nil)
+
         // Setup Source Node
         self.sourceNode = AVAudioSourceNode(format: engineFormat) { isSilence, timestamp, frameCount, ioData in
+            renderDbgCalls += 1
+            let shouldLog = (renderDbgCalls % 100 == 0)
+            if shouldLog {
+                var avail = Int.max
+                for rb in localBuffers { avail = min(avail, rb.bytesAvailableForRead) }
+                print("RENDER[play]: calls=\(renderDbgCalls) path=\(usesConverter ? "converter" : "direct") frameCount=\(frameCount) ringAvail=\(avail)B")
+            }
             if let conv = localConverter, let ctx = localContext {
                 var ioOutputDataPackets = frameCount
                 let status = AudioConverterFillComplexBuffer(
@@ -72,12 +89,22 @@ public class AppAudioNode: @unchecked Sendable {
                     ioData,
                     nil
                 )
+                if shouldLog { print("RENDER[play]: converterStatus=\(status) outPackets=\(ioOutputDataPackets)") }
+                let buffers = UnsafeMutableAudioBufferListPointer(ioData)
                 if status != noErr {
                     // Fill output buffers with silence on error
-                    let buffers = UnsafeMutableAudioBufferListPointer(ioData)
                     for buffer in buffers {
                         if let mData = buffer.mData {
                             memset(mData, 0, Int(frameCount) * bytesPerFrame)
+                        }
+                    }
+                } else if ioOutputDataPackets < frameCount {
+                    // Zero the tail the converter didn't fill so we don't emit stale audio.
+                    let filled = Int(ioOutputDataPackets) * bytesPerFrame
+                    let total = Int(frameCount) * bytesPerFrame
+                    for buffer in buffers {
+                        if let mData = buffer.mData, total > filled {
+                            memset(mData.advanced(by: filled), 0, total - filled)
                         }
                     }
                 }
@@ -122,65 +149,78 @@ public class AppAudioNode: @unchecked Sendable {
     }
 }
 
-// C-style helper context for AudioConverter
-public class AppAudioRenderContext: @unchecked Sendable {
+// Debug counter (racy, debug-only).
+private nonisolated(unsafe) var renderDbgCalls = 0
+
+// C-style helper context for AudioConverter.
+// Owns scratch storage the input proc points the converter at — an AudioConverter
+// input proc receives buffers with mData == NULL and is expected to SET mData to
+// point at the supplied input, not copy into pre-allocated storage.
+public final class AppAudioRenderContext: @unchecked Sendable {
     public let ringBuffers: [RingBuffer]
     public let bytesPerFrame: Int
-    
+    let scratchCapacityFrames: Int
+    let scratch: [UnsafeMutableRawPointer]
+
     public init(ringBuffers: [RingBuffer], bytesPerFrame: Int) {
         self.ringBuffers = ringBuffers
         self.bytesPerFrame = bytesPerFrame
+        let capFrames = 16384  // generous; converter requests far fewer per call
+        self.scratchCapacityFrames = capFrames
+        self.scratch = ringBuffers.map { _ in
+            UnsafeMutableRawPointer.allocate(byteCount: capFrames * bytesPerFrame, alignment: 16)
+        }
+    }
+
+    deinit {
+        scratch.forEach { $0.deallocate() }
     }
 }
 
 // C-style input callback for AudioConverter
-private let converterInputProc: AudioConverterComplexInputDataProc = { inAudioConverter, ioNumberDataPackets, ioData, outDataPacketDescription, inUserData in
+private let converterInputProc: AudioConverterComplexInputDataProc = { _, ioNumberDataPackets, ioData, _, inUserData in
     guard let userData = inUserData else { return -1 }
     let context = Unmanaged<AppAudioRenderContext>.fromOpaque(userData).takeUnretainedValue()
-    
-    let requestedFrames = ioNumberDataPackets.pointee
+
     let bytesPerFrame = context.bytesPerFrame
-    let bytesToRead = Int(requestedFrames) * bytesPerFrame
-    
+    let requestedFrames = min(Int(ioNumberDataPackets.pointee), context.scratchCapacityFrames)
+    let buffers = UnsafeMutableAudioBufferListPointer(ioData)
+
     var minAvailable = Int.max
     for rb in context.ringBuffers {
         minAvailable = min(minAvailable, rb.bytesAvailableForRead)
     }
-    
-    let actualBytesToRead = min(bytesToRead, minAvailable)
-    let actualFrames = UInt32(actualBytesToRead / bytesPerFrame)
-    
-    if actualFrames == 0 {
-        // Output silence if no data
-        ioNumberDataPackets.pointee = requestedFrames
-        let buffers = UnsafeMutableAudioBufferListPointer(ioData)
+    let framesAvailable = minAvailable / bytesPerFrame
+    let frames = min(requestedFrames, framesAvailable)
+
+    // No data yet — hand the converter a block of silence so it still emits output
+    // (returning 0 packets would leave the source node's buffer partially filled).
+    if frames == 0 {
         for i in 0..<buffers.count {
-            if let mData = buffers[i].mData {
-                memset(mData, 0, Int(requestedFrames) * bytesPerFrame)
-                buffers[i].mDataByteSize = UInt32(requestedFrames) * UInt32(bytesPerFrame)
-            }
+            let s = context.scratch[i < context.scratch.count ? i : 0]
+            memset(s, 0, requestedFrames * bytesPerFrame)
+            buffers[i].mData = s
+            buffers[i].mDataByteSize = UInt32(requestedFrames * bytesPerFrame)
+            buffers[i].mNumberChannels = 1
         }
+        ioNumberDataPackets.pointee = UInt32(requestedFrames)
         return noErr
     }
-    
-    ioNumberDataPackets.pointee = actualFrames
-    
-    // Read from ring buffers
-    let buffers = UnsafeMutableAudioBufferListPointer(ioData)
+
+    // Read ring buffer data into our scratch, then point the converter's input at it.
     for i in 0..<buffers.count {
+        let s = context.scratch[i < context.scratch.count ? i : 0]
         if i < context.ringBuffers.count {
-            if let mData = buffers[i].mData {
-                let bytesRead = context.ringBuffers[i].read(mData, byteCount: Int(actualFrames) * bytesPerFrame)
-                buffers[i].mDataByteSize = UInt32(bytesRead)
-            }
+            let bytesRead = context.ringBuffers[i].read(s, byteCount: frames * bytesPerFrame)
+            buffers[i].mData = s
+            buffers[i].mDataByteSize = UInt32(bytesRead)
         } else {
-            // Fill extra channels with silence
-            if let mData = buffers[i].mData {
-                memset(mData, 0, Int(actualFrames) * bytesPerFrame)
-                buffers[i].mDataByteSize = UInt32(actualFrames) * UInt32(bytesPerFrame)
-            }
+            memset(s, 0, frames * bytesPerFrame)
+            buffers[i].mData = s
+            buffers[i].mDataByteSize = UInt32(frames * bytesPerFrame)
         }
+        buffers[i].mNumberChannels = 1
     }
-    
+    ioNumberDataPackets.pointee = UInt32(frames)
     return noErr
 }

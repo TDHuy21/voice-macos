@@ -286,6 +286,10 @@ public class ProcessTapManager: @unchecked Sendable {
     }
 }
 
+// Debug counters (racy, debug-only — fine for diagnostics).
+private nonisolated(unsafe) var tapDbgCalls = 0
+private nonisolated(unsafe) var tapDbgBytes = 0
+
 // C-style IOProc callback — runs on real-time audio thread, must be allocation-free.
 // inDevice will be aggDevID (not tapID) after the aggregate device fix.
 @available(macOS 14.2, *)
@@ -302,10 +306,18 @@ private let tapIOProc: AudioDeviceIOProc = { inDevice, _, inInputData, _, _, _, 
         .assumingMemoryBound(to: AudioBuffer.self)
 
     let buffers = UnsafeBufferPointer(start: firstBufferPtr, count: Int(numberBuffers))
+    var wrote = 0
     for (i, buffer) in buffers.enumerated() {
         if i < ringBuffers.count, let mData = buffer.mData, buffer.mDataByteSize > 0 {
             ringBuffers[i].write(mData, byteCount: Int(buffer.mDataByteSize))
+            wrote += Int(buffer.mDataByteSize)
         }
+    }
+
+    tapDbgCalls += 1
+    tapDbgBytes += wrote
+    if tapDbgCalls % 100 == 0 {
+        print("TAP[capture]: calls=\(tapDbgCalls) lastWrote=\(wrote)B numBuffers=\(numberBuffers) ringAvail=\(ringBuffers.first?.bytesAvailableForRead ?? -1)B")
     }
 
     return noErr
