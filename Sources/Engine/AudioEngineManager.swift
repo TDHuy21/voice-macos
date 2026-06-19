@@ -249,8 +249,6 @@ public class AudioEngineManager: @unchecked Sendable {
         guard let appNode = activeNodes[bundleID] else { return }
         guard let oldRoute = appBusRoutes[bundleID], oldRoute.deviceID == fromDevice else { return }
 
-        appNode.spectrumTap.detach()
-
         // 1. Detach from old engine
         if let oldDevEngine = engines[fromDevice] {
             oldDevEngine.engine.disconnectNodeInput(oldDevEngine.mixer, bus: oldRoute.bus)
@@ -275,8 +273,6 @@ public class AudioEngineManager: @unchecked Sendable {
         newDevEngine.engine.connect(appNode.sourceNode, to: appNode.volumeNode, format: engineFormat)
         newDevEngine.engine.connect(appNode.volumeNode, to: appNode.eqNode, format: engineFormat)
         newDevEngine.engine.connect(appNode.eqNode, to: newDevEngine.mixer, fromBus: 0, toBus: bus, format: engineFormat)
-
-        appNode.spectrumTap.attach(to: appNode.eqNode)
 
         // Restore volume and mute states
         let vol = busVolumes[bundleID] ?? 1.0
