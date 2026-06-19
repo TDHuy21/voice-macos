@@ -1,114 +1,80 @@
 # SoundsSource
 
-A macOS menu bar app for **per-application audio control**. Capture the audio of any running app, then adjust its volume, mute it, apply a 10-band parametric EQ, and route it to any output device — independently of every other app.
+Mình làm cái app này để chỉnh âm thanh riêng cho từng ứng dụng trên Mac. Kiểu như bạn muốn để nhạc Spotify ra tai nghe, còn tiếng Discord thì ra loa ngoài, mỗi cái một âm lượng, thậm chí kéo EQ riêng — macOS mặc định không cho làm vậy, nên có SoundsSource.
 
-Built on CoreAudio process taps (`AudioHardwareCreateProcessTap`) and AVAudioEngine.
+App chạy gọn trên thanh menu bar, bấm vào là ra. Không cần cài driver hay khởi động lại máy gì hết.
 
-> Requires **macOS 14.2+** — process audio tapping uses `CATapDescription` / `AudioHardwareCreateProcessTap`, available only on macOS 14.2 and later.
+> Cần **macOS 14.2 trở lên** nhé. App dùng API tap âm thanh tiến trình của Apple, mà cái này chỉ có từ 14.2.
 
-## Features
+## Nó làm được gì
 
-- **Per-app capture** — tap the audio output of any individual app (Spotify, browsers, Discord, games…).
-- **Per-app volume & mute** — independent volume slider and mute toggle for each captured app.
-- **10-band parametric EQ** — per-app equalizer (32 Hz – 16 kHz) with an interactive curve editor.
-- **Per-app output routing** — send each app to a different output device (e.g. Spotify → headphones, game → speakers).
-- **Presets** — save and restore volume + EQ configurations across apps; set a default applied on launch.
-- **Smart process list** — only shows apps currently producing audio. Helper/renderer processes (Chrome, Cốc Cốc, Discord) resolve to their parent app's name and icon.
-- **Live device handling** — follows the system default output and migrates active apps when devices are plugged/unplugged.
+- Bắt (capture) tiếng của từng app một — Spotify, Chrome, Cốc Cốc, Discord, game…
+- Mỗi app một thanh **âm lượng** và nút **tắt tiếng** riêng.
+- **EQ 10 dải** (32 Hz đến 16 kHz), kéo tay trực tiếp trên đồ thị.
+- Đẩy mỗi app ra một **thiết bị phát khác nhau**. Nhạc ra tai nghe, họp hành ra loa, tuỳ.
+- Lưu lại thành **preset** để lần sau khỏi chỉnh lại từ đầu.
+- Danh sách chỉ hiện app đang thật sự phát tiếng, không hiện mấy tiến trình rác của hệ thống.
 
-## Install
+## Cài đặt
 
-Download **SoundsSource.dmg** from the [latest release](https://github.com/songoku-03/voice-macos/releases/latest), open it, and drag the app into **Applications**.
+Tải file **SoundsSource.dmg** ở [mục Releases](https://github.com/songoku-03/voice-macos/releases/latest), mở ra rồi kéo app thả vào thư mục **Applications**. Xong, mở từ Launchpad là chạy.
 
-The app is ad-hoc signed (not notarized), so on first launch macOS may block it. To open:
+Lần đầu mở có thể bị macOS chặn, báo kiểu "không mở được" hoặc "nhà phát triển chưa xác định". Bình thường thôi, tại app mình ký kiểu ad-hoc chứ chưa mua tài khoản Apple để notarize. Cách qua:
 
-- Right-click the app in Applications → **Open** → **Open**, or
-- Remove the quarantine flag:
+- Chuột phải vào app trong Applications → bấm **Open** → **Open** lần nữa. Làm một lần này thôi, sau mở thẳng được.
+- Hoặc mở Terminal gõ lệnh này cho nhanh:
   ```bash
   xattr -dr com.apple.quarantine /Applications/SoundsSource.app
   ```
 
-On first launch, grant **audio recording permission** when prompted — required to capture process audio.
+À, lần đầu chạy macOS sẽ hỏi quyền **ghi âm**. Phải đồng ý thì app mới bắt được tiếng, không cho là coi như đứng hình.
 
-## Build
+## Dùng thế nào
+
+Bấm icon hình sóng âm trên menu bar, cái bảng điều khiển hiện ra.
+
+1. Trong danh sách là mấy app đang phát tiếng. App nào đang kêu sẽ có chấm xanh.
+2. Muốn chỉnh app nào thì bấm **nút nguồn** bên phải dòng đó để bắt đầu bắt tiếng nó.
+3. Bấm mũi tên để mở rộng dòng ra, lúc này mới hiện đủ đồ chơi:
+   - Thanh kéo **âm lượng** với nút **tắt tiếng**.
+   - Ô **Route to** — chọn loa/tai nghe muốn đẩy tiếng app đó ra.
+   - Phần **EQ** — bật lên rồi kéo mấy điểm trên đường cong cho hợp tai.
+4. Chỉnh xong ưng rồi thì bấm **Save Preset** đặt tên lưu lại. Lần sau chọn lại preset đó ở góc trên bên trái là về y nguyên.
+
+Lưu ý nhỏ: mấy trình duyệt như Chrome, Cốc Cốc hay Discord nó không phát tiếng bằng tiến trình chính, mà bằng tiến trình con (Helper). App mình tự dò ra app cha nên trong danh sách bạn vẫn thấy đúng tên "Google Chrome" kèm icon, cứ bấm vào đó là được.
+
+## Tự build từ mã nguồn
+
+Ai muốn vọc thì clone về rồi chạy script, không cần Xcode mở project gì cho mệt:
 
 ```bash
-# Build a signed .app bundle (ad-hoc, ready to launch) → build/SoundsSource.app
+git clone https://github.com/songoku-03/voice-macos.git
+cd voice-macos
+
+# Build ra file app, nằm ở build/SoundsSource.app
 ./scripts/build_app.sh
 
-# Debug bundle
-./scripts/build_app.sh --debug
-
-# Package a drag-to-install disk image → build/SoundsSource.dmg
+# Hoặc đóng gói luôn thành file .dmg để chia sẻ
 ./scripts/build_dmg.sh
-
-# Compile only, no bundle
-swift build -c release
 ```
 
-Launch with `open build/SoundsSource.app`. A waveform icon appears in the menu bar.
+Build xong gõ `open build/SoundsSource.app` là chạy thử được liền.
 
-### Requirements
+Cần sẵn: macOS 14.2+, bộ Swift 6 (cài command line tools của Xcode 16 trở lên là có). App phải chạy ngoài sandbox để tap được tiếng, nên trong entitlements có bật quyền `system-audio-capture`. Ký local kiểu ad-hoc thì không cần tài khoản Apple, chỉ khi nào muốn phát hành cho người khác khỏi báo lỗi mới cần.
 
-- macOS 14.2 or later
-- Swift 6 toolchain (Xcode 16+ command line tools)
-- Runs **without the sandbox** (required for process audio tapping), with entitlements `com.apple.security.system-audio-capture` and `com.apple.security.temporary-exception.audio-unit-host`
-- No Apple Developer account needed for local ad-hoc signing (notarization requires one)
+## Sơ qua về cấu trúc
 
-## Usage
-
-1. Click the menu bar icon to open the popover.
-2. The list shows every app currently playing audio.
-3. Click the **power button** on a row to start capturing that app.
-4. Expand the row (chevron) for:
-   - **Volume** slider and **mute** toggle
-   - **Route to** — output device for that app
-   - **EQ** — toggle and edit the 10-band curve
-5. **Save Preset** stores the current volume/EQ across all apps; the preset picker (top-left) switches between saved presets.
-
-## Architecture
-
-Three library targets plus the executable, in a strict dependency chain:
+Code chia làm mấy tầng cho dễ quản, tầng trên xài tầng dưới:
 
 ```
-SoundsSource (executable) → UI → Engine → Core
+SoundsSource → UI → Engine → Core
 ```
 
-### `Sources/Core/` — low-level audio primitives
-- **`AudioProcess`** — value type for a running app with audio output.
-- **`AudioProcessEnumerator`** — `@Observable`; lists audio-producing processes via the CoreAudio `'prs#'` property; resolves helper processes to their parent app; refreshes on app launch/terminate and CoreAudio property changes.
-- **`ProcessTapManager`** — singleton; creates/destroys process taps (`CATapDescription` + private aggregate device) and feeds captured PCM into ring buffers via a C-style `AudioDeviceIOProc`.
-- **`RingBuffer`** — lock-free circular buffer for audio bytes.
+- **Core** — phần chạm tay vào CoreAudio: liệt kê app đang phát tiếng, tạo tap để hứng âm thanh, với cái ring buffer chứa data.
+- **Engine** — dựng đồ thị AVAudioEngine: mỗi thiết bị một engine, mỗi app một node có kèm EQ và âm lượng, lo luôn vụ lưu preset.
+- **UI** — mấy màn hình SwiftUI: cái popover, danh sách app, thanh chỉnh, đồ thị EQ.
+- **SoundsSource** — điểm khởi động, dựng icon menu bar.
 
-### `Sources/Engine/` — AVAudioEngine graph management
-- **`AudioEngineManager`** — `@Observable` singleton; owns one engine per output device; manages per-app node lifecycle, device switching, volume/mute/EQ state, and presets.
-- **`AppAudioNode`** — wraps an `AVAudioSourceNode` + `AVAudioUnitEQ`; reads from ring buffers and converts sample rate / channel layout when the tap and engine formats differ.
-- **`EQController`** — thin wrapper over `AVAudioUnitEQ` (10 parametric bands); handles preset serialization.
-- **`PresetStore`** — `@Observable`; persists presets to `UserDefaults` as JSON.
-- **`AudioDevice`** — value type (`deviceID`, `name`, `uid`).
+## Giấy phép
 
-### `Sources/UI/` — SwiftUI menu bar popover
-- **`PopoverContentView`** — root view (process list + preset picker + output device picker).
-- **`ProcessListView` / `AppRowView`** — process list with per-row controls.
-- **`AppControlsView`** — per-app volume slider + mute toggle.
-- **`EQCurveEditor`** — interactive EQ curve editor.
-- **`OutputDevicePicker`** — output device selector.
-
-### `Sources/SoundsSource/` — entry point
-- **`main.swift`** — creates `NSApplication` and sets the delegate.
-- **`AppDelegate`** — creates the `NSStatusItem`, the `NSPopover`, and initializes `AudioEngineManager.shared`.
-
-## Audio data flow
-
-```
-CATapDescription (per app)
-    → AudioDeviceIOProc callback → RingBuffer(s)
-        → AVAudioSourceNode render block (pulls from RingBuffer)
-            → AVAudioUnitEQ (10-band parametric)
-                → AVAudioMixerNode (per output engine)
-                    → AVAudioOutputNode → physical output device
-```
-
-## License
-
-No license file is included. Add one before publishing if you intend others to reuse the code.
+Chưa kèm file license. Nếu định cho người khác xài lại code thì thêm vào nhé.
