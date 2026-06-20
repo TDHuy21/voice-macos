@@ -13,6 +13,12 @@ public struct PopoverContentView: View {
     @State private var showSaveAlert = false
     @State private var newPresetName = ""
 
+    // Poll the audio process list while the popover is open. CoreAudio's process-object
+    // list listener only fires when processes are added/removed — not when an already
+    // running app STARTS or STOPS producing output (its isRunningOutput flag flips but
+    // the object list is unchanged). Polling keeps the list live for play/pause events.
+    private let refreshTimer = Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()
+
     public init() {}
 
     // Only show apps actively producing audio, plus any currently tapped app
@@ -123,6 +129,9 @@ public struct PopoverContentView: View {
             .padding(14)
             .frame(width: 220)
             .background(Color(NSColor.windowBackgroundColor))
+        }
+        .onReceive(refreshTimer) { _ in
+            enumerator.refresh()
         }
         .onAppear {
             enumerator.refresh()
