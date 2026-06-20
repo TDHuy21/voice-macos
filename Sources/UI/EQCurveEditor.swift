@@ -167,6 +167,7 @@ public struct EQCurveEditor: View {
         }
         .onReceive(spectrumTimer) { _ in
             guard let spectrum = spectrum else { return }
+            spectrum.computeLevels()
             let latest = spectrum.levels()
             withAnimation(.easeOut(duration: 0.08)) {
                 spectrumLevels = latest

@@ -71,8 +71,12 @@ public class AppAudioNode: @unchecked Sendable {
         let localContext = self.renderContext
         let localBuffers = self.ringBuffers
         let bytesPerFrame = Int(dstFormat.mBytesPerFrame)
-        
+
         let usesConverter = (self.converter != nil)
+
+        // Feed the spectrum analyzer from the rendered output (no graph tap needed).
+        self.spectrumTap.sampleRate = Float(dstFormat.mSampleRate > 0 ? dstFormat.mSampleRate : 48000)
+        let localSpectrum = self.spectrumTap
 
         // Setup Source Node
         self.sourceNode = AVAudioSourceNode(format: engineFormat) { isSilence, timestamp, frameCount, ioData in
@@ -141,7 +145,10 @@ public class AppAudioNode: @unchecked Sendable {
                     }
                 }
             }
-            
+
+            // Push rendered output into the spectrum analyzer (UI-thread runs the FFT).
+            localSpectrum.capture(ioData, frameCount: Int(frameCount))
+
             return noErr
         }
     }
