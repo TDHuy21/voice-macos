@@ -1328,15 +1328,6 @@
           <div class="popover-header">
             <div class="popover-brand">
               <span class="brand-title">Minh Thw ☁️</span>
-              <select class="preset-selector" id="preset-picker" title="Chọn Preset EQ">
-                <option value="Flat">Flat</option>
-                <option value="Bass Booster">Bass Booster</option>
-                <option value="Vocal Booster">Vocal Booster</option>
-                <option value="Podcast">Podcast</option>
-                <option value="Rock">Rock</option>
-                <option value="Electronic">Electronic</option>
-                <option value="Custom" id="custom-preset-option" disabled>Custom</option>
-              </select>
             </div>
             
             <!-- Output device -->
@@ -1680,23 +1671,7 @@ cd voice-macos
       }
     });
 
-    // Preset selection change listener
-    const presetPicker = document.getElementById('preset-picker');
-    presetPicker.addEventListener('change', (e) => {
-      const presetName = e.target.value;
-      if (presetName === 'Custom') return;
-      
-      state.activePreset = presetName;
-      const bands = PRESETS[presetName];
-      
-      // Update bands for any active tapped app that has EQ On
-      state.apps.forEach(app => {
-        if (app.tapped && !app.eqBypassed) {
-          app.eqBands = [...bands];
-          updateEQGraph(app.id);
-        }
-      });
-    });
+
 
     // Main Output Selector
     document.getElementById('system-output').addEventListener('change', (e) => {
@@ -2011,9 +1986,7 @@ cd voice-macos
       // Update app's EQ band value
       app.eqBands[dragNode] = Math.round(db * 2) / 2; // round to nearest 0.5dB
       
-      // Set preset selector to 'Custom'
-      document.getElementById('preset-picker').value = 'Custom';
-      document.getElementById('custom-preset-option').disabled = false;
+
       
       updateEQGraph(dragAppId);
     }
