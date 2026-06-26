@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SoundsSource — Điều khiển âm thanh từng ứng dụng macOS</title>
+  <title>Minh Thw ☁️ — Điều khiển âm thanh từng ứng dụng macOS</title>
   <meta name="description" content="Capture, EQ, mute và định tuyến âm thanh của bất kỳ ứng dụng macOS nào độc lập. Tiện ích menu bar miễn phí và mã nguồn mở." />
   
   <!-- Modern Fonts -->
@@ -13,20 +13,34 @@
 
   <style>
     :root {
-      --primary: #00f2fe;
-      --primary-rgb: 0, 242, 254;
-      --secondary: #9d4edd;
-      --secondary-rgb: 157, 78, 221;
-      --bg: #07090e;
-      --bg-soft: #0e121a;
-      --bg-glass: rgba(14, 18, 26, 0.75);
-      --text: #f3f4f6;
-      --text-dim: #9ca3af;
-      --border: rgba(255, 255, 255, 0.08);
-      --border-glow: rgba(0, 242, 254, 0.15);
+      --primary: #FFE15D;
+      --primary-rgb: 255, 225, 93;
+      --secondary: #FF5E97;
+      --secondary-rgb: 255, 94, 151;
+      --bg: #171520;
+      --bg-soft: #221F32;
+      --surface-hi: #2E2A44;
+      --bg-glass: rgba(34, 31, 50, 0.95);
+      --text: #FAFAFD;
+      --text-dim: #A39FB8;
+      --text-tertiary: #6A6482;
+      --border: #0D0C13;
+      --border-glow: rgba(255, 94, 151, 0.16);
       --font-display: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       --font-mono: 'JetBrains Mono', "SF Mono", Menlo, monospace;
+      
+      /* Neobrutalist details */
+      --stroke: #0D0C13;
+      --border-width: 2px;
+      --shadow-color: #0D0C13;
+      --shadow-offset: 3px;
+      --card-bg: #29253B;
+      --card-bg-hover: #342F4B;
+      --card-bg-active: #413B5E;
+      --playing: #54E7A2;
+      --danger: #FF5252;
+      --warning: #FFAC38;
     }
 
     * {
@@ -59,9 +73,9 @@
       -webkit-font-smoothing: antialiased;
       overflow-x: hidden;
       background-image: 
-        radial-gradient(circle at 10% 15%, rgba(157, 78, 221, 0.08) 0%, transparent 40%),
-        radial-gradient(circle at 90% 85%, rgba(0, 242, 254, 0.08) 0%, transparent 40%),
-        radial-gradient(circle at 50% 50%, rgba(14, 18, 26, 0.5) 0%, transparent 100%);
+        radial-gradient(circle at 10% 15%, rgba(255, 94, 151, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 90% 85%, rgba(255, 225, 93, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 50% 50%, rgba(22, 21, 32, 0.5) 0%, transparent 100%);
     }
 
     .container {
@@ -72,17 +86,16 @@
 
     /* Glassmorphic Utilities */
     .glass-card {
-      background: var(--bg-glass);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--border);
+      background: var(--card-bg);
+      border: var(--border-width) solid var(--stroke);
       border-radius: 16px;
-      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+      box-shadow: var(--shadow-offset) var(--shadow-offset) 0 0 var(--shadow-color);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s;
     }
     .glass-card:hover {
-      border-color: rgba(0, 242, 254, 0.2);
-      box-shadow: 0 8px 32px 0 rgba(0, 242, 254, 0.05);
+      transform: translate(-1px, -1px);
+      box-shadow: calc(var(--shadow-offset) + 1px) calc(var(--shadow-offset) + 1px) 0 0 var(--shadow-color);
+      border-color: var(--secondary);
     }
 
     /* Navbar */
@@ -217,26 +230,29 @@
       cursor: pointer;
     }
     .btn-primary {
-      background: linear-gradient(135deg, var(--primary) 0%, #00d2fe 100%);
-      color: #042026;
-      box-shadow: 0 10px 30px rgba(0, 242, 254, 0.25);
+      background: linear-gradient(135deg, var(--primary) 0%, #ffd000 100%);
+      color: var(--bg);
+      border: var(--border-width) solid var(--stroke);
+      box-shadow: var(--shadow-offset) var(--shadow-offset) 0 0 var(--shadow-color);
     }
     .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 15px 35px rgba(0, 242, 254, 0.35);
+      transform: translate(-1px, -1px);
+      box-shadow: calc(var(--shadow-offset) + 1px) calc(var(--shadow-offset) + 1px) 0 0 var(--shadow-color);
     }
     .btn-primary:active {
-      transform: translateY(0);
+      transform: translate(1px, 1px);
+      box-shadow: calc(var(--shadow-offset) - 1px) calc(var(--shadow-offset) - 1px) 0 0 var(--shadow-color);
     }
     .btn-secondary {
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid var(--border);
+      background: var(--bg-soft);
+      border: var(--border-width) solid var(--stroke);
       color: var(--text);
+      box-shadow: var(--shadow-offset) var(--shadow-offset) 0 0 var(--shadow-color);
     }
     .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.06);
-      border-color: rgba(255, 255, 255, 0.15);
-      transform: translateY(-2px);
+      background: var(--surface-hi);
+      transform: translate(-1px, -1px);
+      box-shadow: calc(var(--shadow-offset) + 1px) calc(var(--shadow-offset) + 1px) 0 0 var(--shadow-color);
     }
     .hero .requirements {
       font-size: 13px;
@@ -251,13 +267,13 @@
     }
     .mac-desktop {
       width: 100%;
-      border-radius: 14px;
+      border-radius: 20px;
       overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: radial-gradient(circle at 30% 30%, #151a26 0%, #090b10 100%);
-      box-shadow: 0 25px 70px rgba(0, 0, 0, 0.65);
+      border: var(--border-width) solid var(--stroke);
+      background: radial-gradient(circle at 30% 30%, #221f32 0%, #171520 100%);
+      box-shadow: 6px 6px 0 0 var(--stroke);
       position: relative;
-      aspect-ratio: 16 / 10.5;
+      aspect-ratio: 16 / 11;
     }
     
     /* Wallpaper graphics */
@@ -331,16 +347,14 @@
       right: 14px;
       width: 360px;
       max-height: calc(100% - 46px);
-      border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.09);
-      background: rgba(20, 24, 33, 0.85);
-      backdrop-filter: blur(25px) saturate(190%);
-      -webkit-backdrop-filter: blur(25px) saturate(190%);
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      border-radius: 22px;
+      border: var(--border-width) solid var(--stroke);
+      background: rgba(34, 31, 50, 0.96);
+      box-shadow: 4px 4px 0 0 var(--stroke);
       z-index: 20;
       display: flex;
       flex-direction: column;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", "Nunito", "Outfit", sans-serif;
       overflow: hidden;
       opacity: 0;
       transform: translateY(-8px) scale(0.98);
@@ -355,31 +369,32 @@
 
     /* Popover Header */
     .popover-header {
-      padding: 10px 12px;
+      padding: 12px 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: rgba(255, 255, 255, 0.03);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      background: var(--bg-soft);
+      border-bottom: var(--border-width) solid var(--stroke);
     }
     .popover-brand {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
     }
     .brand-title {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 900;
-      color: var(--primary);
+      color: var(--text-primary);
       letter-spacing: -0.01em;
+      font-family: var(--font-display);
     }
     .preset-selector {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 4px;
+      background: var(--bg-soft);
+      border: 2px solid var(--stroke);
+      border-radius: 8px;
       color: #fff;
       font-size: 11px;
-      font-weight: 500;
+      font-weight: 700;
       padding: 2px 18px 2px 6px;
       cursor: pointer;
       outline: none;
@@ -389,16 +404,18 @@
       background-position: right 4px center;
       background-size: 12px;
       min-width: 85px;
+      box-shadow: 2px 2px 0 0 var(--stroke);
     }
     .preset-selector:hover {
-      background-color: rgba(255, 255, 255, 0.08);
+      background-color: var(--surface-hi);
     }
     .device-picker {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 4px;
+      background: var(--bg-soft);
+      border: 2px solid var(--stroke);
+      border-radius: 8px;
       color: #eaeaea;
       font-size: 11px;
+      font-weight: 700;
       padding: 2px 18px 2px 6px;
       cursor: pointer;
       outline: none;
@@ -408,9 +425,10 @@
       background-position: right 4px center;
       background-size: 12px;
       max-width: 140px;
+      box-shadow: 2px 2px 0 0 var(--stroke);
     }
     .device-picker:hover {
-      background-color: rgba(255, 255, 255, 0.08);
+      background-color: var(--surface-hi);
     }
 
     /* Popover Content (App List) */
@@ -418,38 +436,51 @@
       flex: 1;
       overflow-y: auto;
       max-height: 420px;
+      padding: 12px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
     
     .app-row {
       display: flex;
       flex-direction: column;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-      transition: background 0.15s;
+      background: var(--card-bg);
+      border: var(--border-width) solid var(--stroke);
+      border-radius: 16px;
+      box-shadow: var(--shadow-offset) var(--shadow-offset) 0 0 var(--shadow-color);
+      margin: 4px 16px 8px 16px;
+      transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
     }
-    .app-row.disabled .row-header {
-      opacity: 0.45;
+    .app-row:hover {
+      background: var(--card-bg-hover);
+    }
+    .app-row.expanded {
+      background: var(--card-bg-active);
+    }
+    .app-row.disabled {
+      opacity: 0.65;
+      box-shadow: 1px 1px 0 0 var(--stroke);
     }
 
     .row-header {
       display: flex;
       align-items: center;
-      padding: 8px 10px;
+      padding: 10px 12px;
       gap: 10px;
       cursor: default;
       user-select: none;
     }
-    .row-header:hover {
-      background: rgba(255, 255, 255, 0.02);
-    }
-    .app-row.expanded .row-header {
-      background: rgba(255, 255, 255, 0.03);
-    }
     .app-icon {
-      width: 20px;
-      height: 20px;
+      width: 22px;
+      height: 22px;
       display: flex;
       align-items: center;
       justify-content: center;
+      border-radius: 8px;
+      border: 1px solid var(--stroke);
+      overflow: hidden;
+      background: var(--surface-hi);
     }
     .app-icon svg {
       width: 100%;
@@ -462,17 +493,18 @@
       flex: 1;
     }
     .app-name {
-      font-size: 12px;
-      font-weight: 600;
+      font-size: 13px;
+      font-weight: 700;
       color: #fff;
+      font-family: var(--font-display);
     }
     .app-status {
-      width: 5px;
-      height: 5px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
-      background: #10b981;
+      background: var(--playing);
       display: none;
-      box-shadow: 0 0 6px #10b981;
+      box-shadow: 0 0 6px var(--playing);
     }
     .app-row.playing .app-status {
       display: block;
@@ -481,25 +513,24 @@
     /* VU Meter */
     .vu-meter {
       display: flex;
-      gap: 1.5px;
+      gap: 2px;
       align-items: flex-end;
-      width: 22px;
+      width: 31px;
       height: 12px;
     }
     .vu-bar {
-      width: 2px;
+      width: 3.5px;
       height: 2px;
-      background: rgba(255,255,255,0.1);
-      border-radius: 0.5px;
+      background: rgba(13, 12, 19, 0.4);
+      border-radius: 1.5px;
       transition: height 0.08s ease;
     }
     /* Animated VU bars when active */
     .app-row.tapped.playing:not(.muted) .vu-bar {
-      background: #10b981;
+      background: var(--playing);
     }
-    .app-row.tapped.playing:not(.muted) .vu-bar:nth-child(4) { background: #f59e0b; }
-    .app-row.tapped.playing:not(.muted) .vu-bar:nth-child(5) { background: #ef4444; }
-    .app-row.tapped.playing:not(.muted) .vu-bar:nth-child(6) { background: #ef4444; }
+    .app-row.tapped.playing:not(.muted) .vu-bar:nth-child(5) { background: var(--warning); }
+    .app-row.tapped.playing:not(.muted) .vu-bar:nth-child(6) { background: var(--danger); }
 
     /* Control buttons */
     .row-actions {
@@ -511,62 +542,68 @@
       background: none;
       border: none;
       cursor: pointer;
-      color: rgba(255,255,255,0.3);
+      color: var(--text-tertiary);
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 0;
       outline: none;
-      transition: color 0.15s;
+      transition: color 0.15s, transform 0.15s;
     }
     .power-btn:hover {
-      color: rgba(255,255,255,0.6);
+      transform: scale(1.1);
     }
     .app-row.tapped .power-btn {
       color: var(--primary);
     }
     .power-btn svg {
-      width: 16px;
-      height: 16px;
+      width: 19px;
+      height: 19px;
     }
 
     .expand-btn {
       background: none;
       border: none;
       cursor: pointer;
-      color: rgba(255,255,255,0.4);
+      color: var(--text-secondary);
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 0;
+      padding: 4px;
+      border-radius: 50%;
       outline: none;
-      transition: transform 0.2s ease, color 0.15s;
+      transition: transform 0.2s ease, background 0.15s;
+      width: 20px;
+      height: 20px;
     }
     .expand-btn:hover {
-      color: rgba(255,255,255,0.7);
+      background: rgba(255, 255, 255, 0.05);
     }
     .expand-btn:disabled {
       opacity: 0.2;
       cursor: not-allowed;
     }
     .expand-btn svg {
-      width: 10px;
-      height: 10px;
+      width: 9px;
+      height: 9px;
       transform: rotate(0deg);
       transition: transform 0.2s ease;
     }
+    .app-row.expanded .expand-btn {
+      background: var(--border-glow);
+    }
     .app-row.expanded .expand-btn svg {
-      transform: rotate(90deg);
+      transform: rotate(180deg);
     }
 
     /* Expanded Details Panel */
     .row-details {
       display: none;
-      padding: 0 10px 10px 30px;
-      background: rgba(255, 255, 255, 0.03);
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.1);
       flex-direction: column;
-      gap: 10px;
-      border-top: 1px solid rgba(255, 255, 255, 0.02);
+      gap: 12px;
+      border-top: var(--border-width) solid var(--stroke);
       animation: slideDown 0.2s ease-out;
     }
     .app-row.expanded.tapped .row-details {
@@ -583,20 +620,20 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding-top: 6px;
     }
     .route-label {
-      font-size: 9px;
-      font-weight: 800;
-      color: rgba(255,255,255,0.4);
+      font-size: 10px;
+      font-weight: 900;
+      color: var(--text-dim);
       letter-spacing: 0.05em;
       display: flex;
       align-items: center;
       gap: 4px;
+      font-family: var(--font-display);
     }
     .route-label svg {
-      width: 10px;
-      height: 10px;
+      width: 12px;
+      height: 12px;
       fill: var(--secondary);
     }
 
@@ -610,7 +647,7 @@
       background: none;
       border: none;
       cursor: pointer;
-      color: var(--primary);
+      color: var(--secondary);
       width: 16px;
       height: 16px;
       display: flex;
@@ -620,11 +657,11 @@
       outline: none;
     }
     .mute-btn.muted {
-      color: rgba(255,255,255,0.4);
+      color: var(--text-tertiary);
     }
     .mute-btn svg {
-      width: 12px;
-      height: 12px;
+      width: 14px;
+      height: 14px;
     }
     .vol-slider-wrap {
       flex: 1;
@@ -634,52 +671,50 @@
     }
     .vol-slider {
       width: 100%;
-      height: 3px;
-      background: rgba(255,255,255,0.15);
-      border-radius: 2px;
+      height: 6px;
+      background: var(--stroke);
+      border-radius: 4px;
       outline: none;
       appearance: none;
       cursor: pointer;
-      transition: background 0.15s;
-    }
-    .vol-slider::-webkit-slider-runnable-track {
-      background: transparent;
     }
     .vol-slider::-webkit-slider-thumb {
       appearance: none;
-      width: 10px;
-      height: 10px;
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
-      background: var(--primary);
+      background: var(--secondary);
+      border: 2px solid var(--stroke);
       cursor: pointer;
-      box-shadow: 0 0 5px rgba(0, 242, 254, 0.5);
+      box-shadow: 1px 1px 0 0 var(--stroke);
       transition: transform 0.1s;
     }
     .vol-slider::-webkit-slider-thumb:hover {
       transform: scale(1.2);
     }
     .vol-percentage {
-      font-size: 9px;
+      font-size: 10px;
       font-family: var(--font-mono);
-      color: rgba(255,255,255,0.6);
-      width: 28px;
+      color: var(--text-secondary);
+      width: 32px;
       text-align: right;
     }
     .eq-bypass-btn {
-      background: rgba(157, 78, 221, 0.2);
-      border: none;
+      background: rgba(255, 94, 151, 0.15);
+      border: 2px solid var(--stroke);
       color: var(--secondary);
       font-size: 9px;
-      font-weight: 700;
-      padding: 3px 6px;
-      border-radius: 4px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 20px;
       cursor: pointer;
       outline: none;
       transition: background 0.15s, color 0.15s;
     }
     .eq-bypass-btn.bypassed {
-      background: rgba(255,255,255,0.05);
-      color: rgba(255,255,255,0.5);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-tertiary);
+      border-color: var(--text-tertiary);
     }
 
     /* EQ Editor */
@@ -720,37 +755,172 @@
 
     /* Popover Footer */
     .popover-footer {
-      padding: 10px 12px;
-      background: rgba(255,255,255,0.02);
-      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 12px 16px;
+      background: var(--bg-soft);
+      border-top: var(--border-width) solid var(--stroke);
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
     .footer-action-btn {
-      background: none;
-      border: none;
-      font-size: 10px;
-      font-weight: 700;
-      color: rgba(255,255,255,0.55);
+      background: var(--surface-hi);
+      border: 2px solid var(--stroke);
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--text-secondary);
+      padding: 5px 12px;
       cursor: pointer;
       display: flex;
       align-items: center;
       gap: 4px;
-      transition: color 0.15s;
+      transition: background 0.15s, color 0.15s;
     }
     .footer-action-btn:hover {
-      color: #fff;
+      background: var(--card-bg-hover);
+      color: var(--text-primary);
     }
     .footer-action-btn.quit-btn {
-      color: rgba(239, 68, 68, 0.85);
+      background: rgba(255, 82, 82, 0.12);
+      color: var(--danger);
     }
     .footer-action-btn.quit-btn:hover {
-      color: rgba(239, 68, 68, 1);
+      background: rgba(255, 82, 82, 0.2);
     }
     .footer-action-btn svg {
       width: 12px;
       height: 12px;
+    }
+
+    /* Eye Rest Timer Panel */
+    .eye-rest-panel {
+      background: var(--surface-hi);
+      border: var(--border-width) solid var(--stroke);
+      border-radius: 16px;
+      margin: 8px 16px 12px 16px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: var(--shadow-offset) var(--shadow-offset) 0 0 var(--shadow-color);
+    }
+    .eye-rest-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .eye-rest-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 800;
+      font-family: var(--font-display);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .eye-rest-title-wrap svg {
+      width: 14px;
+      height: 14px;
+      fill: var(--primary);
+    }
+    .eye-rest-badge {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      font-weight: 700;
+    }
+    .eye-rest-badge.studying {
+      background: rgba(255, 225, 93, 0.12);
+      color: var(--primary);
+    }
+    .eye-rest-badge.breaking {
+      background: rgba(255, 82, 82, 0.12);
+      color: var(--danger);
+    }
+    .eye-rest-badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+    .eye-rest-badge.studying .eye-rest-badge-dot {
+      background: var(--primary);
+    }
+    .eye-rest-badge.breaking .eye-rest-badge-dot {
+      background: var(--danger);
+    }
+    
+    .eye-rest-inputs {
+      display: flex;
+      gap: 8px;
+    }
+    .eye-rest-field {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .eye-rest-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-dim);
+    }
+    .eye-rest-input {
+      background: var(--card-bg);
+      border: 2px solid var(--stroke);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 6px;
+      text-align: center;
+      outline: none;
+      width: 100%;
+    }
+    .eye-rest-input:focus {
+      border-color: var(--secondary);
+    }
+    
+    .eye-rest-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px;
+      border-radius: 16px;
+      border: 2px solid var(--stroke);
+      font-family: var(--font-sans);
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, background-color 0.15s;
+      outline: none;
+    }
+    .eye-rest-btn.start {
+      background: var(--primary);
+      color: var(--bg);
+      box-shadow: 2px 2px 0 0 var(--stroke);
+    }
+    .eye-rest-btn.start:hover {
+      transform: translate(-1px, -1px);
+      box-shadow: 3px 3px 0 0 var(--stroke);
+    }
+    .eye-rest-btn.start:active {
+      transform: translate(0, 0);
+      box-shadow: 2px 2px 0 0 var(--stroke);
+    }
+    .eye-rest-btn.stop {
+      background: rgba(255, 82, 82, 0.15);
+      color: var(--danger);
+      box-shadow: none;
+    }
+    .eye-rest-btn.stop:hover {
+      background: rgba(255, 82, 82, 0.25);
     }
 
     /* Demo Instructions Overlay */
@@ -1073,8 +1243,8 @@
   <nav>
     <div class="container" style="width: 100%; display: flex; align-items: center; justify-content: space-between;">
       <a href="#" class="nav-logo">
-        <img src="./logo.png" alt="SoundsSource logo">
-        <span>Sounds<accent>Source</accent></span>
+        <img src="./logo.png" alt="Minh Thw logo">
+        <span>Minh<accent> Thw ☁️</accent></span>
       </a>
       <div class="nav-links">
         <a href="#features">Tính năng</a>
@@ -1103,7 +1273,7 @@
       <div class="hero-ctas">
         <a class="btn btn-primary" href="https://github.com/songoku-03/voice-macos/releases/latest/download/SoundsSource.dmg">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-          Tải SoundsSource.dmg
+          Tải MinhThw.dmg
         </a>
         <a class="btn btn-secondary" href="https://github.com/songoku-03/voice-macos">
           Xem dự án GitHub
@@ -1139,8 +1309,8 @@
             <!-- Date/Time -->
             <span style="font-weight: 600;" id="mac-clock">Sat 11:52 PM</span>
             
-            <!-- SoundsSource Indicator Trigger -->
-            <div class="menubar-app-trigger active" id="popover-trigger" title="Mở SoundsSource">
+            <!-- Minh Thw Indicator Trigger -->
+            <div class="menubar-app-trigger active" id="popover-trigger" title="Mở Minh Thw">
               <svg viewBox="0 0 24 24">
                 <rect x="3" y="10" width="3" height="4" rx="1.5"/>
                 <rect x="8" y="6" width="3" height="12" rx="1.5"/>
@@ -1151,13 +1321,13 @@
           </div>
         </div>
 
-        <!-- SoundsSource App Popover Window -->
+        <!-- Minh Thw App Popover Window -->
         <div class="mac-popover open" id="app-popover">
           
           <!-- Header -->
           <div class="popover-header">
             <div class="popover-brand">
-              <span class="brand-title">SoundsSource</span>
+              <span class="brand-title">Minh Thw ☁️</span>
               <select class="preset-selector" id="preset-picker" title="Chọn Preset EQ">
                 <option value="Flat">Flat</option>
                 <option value="Bass Booster">Bass Booster</option>
@@ -1182,6 +1352,36 @@
             <!-- Items generated via JS to allow smooth interactive bindings -->
           </div>
 
+          <!-- Eye Rest Timer Panel -->
+          <div class="eye-rest-panel" id="eye-rest-panel">
+            <div class="eye-rest-header">
+              <div class="eye-rest-title-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <span>Nghỉ mắt</span>
+              </div>
+              <div class="eye-rest-badge" id="eye-rest-status-badge" style="display: none;">
+                <span class="eye-rest-badge-dot"></span>
+                <span id="eye-rest-status-text">📖 25:00</span>
+              </div>
+            </div>
+            
+            <div class="eye-rest-inputs" id="eye-rest-inputs">
+              <div class="eye-rest-field">
+                <span class="eye-rest-label">Học (phút)</span>
+                <input type="number" class="eye-rest-input" id="eye-rest-study" value="25" min="1" max="120">
+              </div>
+              <div class="eye-rest-field">
+                <span class="eye-rest-label">Nghỉ (phút)</span>
+                <input type="number" class="eye-rest-input" id="eye-rest-break" value="5" min="1" max="60">
+              </div>
+            </div>
+            
+            <button class="eye-rest-btn start" id="eye-rest-btn" onclick="toggleEyeRest()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" id="eye-rest-btn-icon" style="display:inline-block;vertical-align:middle;margin-right:2px;"><path d="M8 5v14l11-7z"/></svg>
+              <span id="eye-rest-btn-text">Bắt đầu</span>
+            </button>
+          </div>
+
           <!-- Footer -->
           <div class="popover-footer">
             <button class="footer-action-btn" id="save-preset-btn">
@@ -1189,7 +1389,7 @@
               Save Preset
             </button>
             <button class="footer-action-btn quit-btn" id="quit-app-btn">
-              Quit SoundsSource
+              Quit Minh Thw
             </button>
           </div>
         </div>
@@ -1282,7 +1482,7 @@
           <div class="timeline-num">2</div>
           <div class="timeline-content">
             <h3>Thả vào thư mục Applications</h3>
-            <p>Mở file DMG vừa tải, kéo biểu tượng <b>SoundsSource</b> thả vào thư mục <b>Applications</b> trên ổ đĩa của bạn.</p>
+            <p>Mở file DMG vừa tải, kéo biểu tượng <b>Minh Thw</b> thả vào thư mục <b>Applications</b> trên ổ đĩa của bạn.</p>
           </div>
         </div>
 
@@ -1291,7 +1491,7 @@
           <div class="timeline-num">3</div>
           <div class="timeline-content">
             <h3>Mở và Cấp quyền thu âm</h3>
-            <p>Khởi chạy SoundsSource lần đầu tiên. macOS sẽ yêu cầu cấp quyền <b>Ghi âm (Microphone/Audio capture)</b>. Đây là quyền bắt buộc để hệ thống cho phép app tap và trích xuất luồng âm thanh tiến trình. Chọn <b>Đồng ý (Allow)</b>.</p>
+            <p>Khởi chạy <b>Minh Thw</b> lần đầu tiên. macOS sẽ yêu cầu cấp quyền <b>Ghi âm (Microphone/Audio capture)</b>. Đây là quyền bắt buộc để hệ thống cho phép app tap và trích xuất luồng âm thanh tiến trình. Chọn <b>Đồng ý (Allow)</b>.</p>
           </div>
         </div>
 
@@ -1355,10 +1555,9 @@ cd voice-macos
     </div>
   </section>
 
-  <!-- Footer -->
   <footer>
     <div class="container">
-      <p>SoundsSource · Dự án mã nguồn mở đăng tải trên <a href="https://github.com/songoku-03/voice-macos" target="_blank">GitHub</a></p>
+      <p>Minh Thw · Dự án mã nguồn mở đăng tải trên <a href="https://github.com/songoku-03/voice-macos" target="_blank">GitHub</a></p>
       <p class="tech-note">Được xây dựng bằng API CoreAudio process taps kết hợp với AVAudioEngine đồ thị node âm thanh của Apple.</p>
     </div>
   </footer>
@@ -1874,6 +2073,94 @@ cd voice-macos
       }).catch(err => {
         console.error('Không thể sao chép văn bản: ', err);
       });
+    }
+
+    // Eye Rest Timer State
+    const eyeRest = {
+      phase: 'idle', // 'idle', 'studying', 'breaking'
+      studyMin: 25,
+      breakMin: 5,
+      remaining: 0,
+      timer: null
+    };
+
+    function toggleEyeRest() {
+      const btn = document.getElementById('eye-rest-btn');
+      const btnText = document.getElementById('eye-rest-btn-text');
+      const btnIcon = document.getElementById('eye-rest-btn-icon');
+      const badge = document.getElementById('eye-rest-status-badge');
+      const studyInput = document.getElementById('eye-rest-study');
+      const breakInput = document.getElementById('eye-rest-break');
+
+      if (eyeRest.phase === 'idle') {
+        // Start the timer
+        eyeRest.studyMin = parseInt(studyInput.value) || 25;
+        eyeRest.breakMin = parseInt(breakInput.value) || 5;
+        eyeRest.phase = 'studying';
+        eyeRest.remaining = eyeRest.studyMin * 60;
+
+        // UI update
+        btn.className = 'eye-rest-btn stop';
+        btnText.innerText = 'Dừng';
+        btnIcon.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>'; // Stop icon SVG
+        
+        badge.className = 'eye-rest-badge studying';
+        badge.style.display = 'flex';
+        updateEyeRestBadge();
+
+        studyInput.disabled = true;
+        breakInput.disabled = true;
+
+        eyeRest.timer = setInterval(tickEyeRest, 1000);
+      } else {
+        // Stop the timer
+        clearInterval(eyeRest.timer);
+        eyeRest.timer = null;
+        eyeRest.phase = 'idle';
+
+        // UI update
+        btn.className = 'eye-rest-btn start';
+        btnText.innerText = 'Bắt đầu';
+        btnIcon.innerHTML = '<path d="M8 5v14l11-7z"/>'; // Play icon SVG
+        
+        badge.style.display = 'none';
+
+        studyInput.disabled = false;
+        breakInput.disabled = false;
+      }
+    }
+
+    function tickEyeRest() {
+      eyeRest.remaining--;
+
+      if (eyeRest.remaining <= 0) {
+        if (eyeRest.phase === 'studying') {
+          // Switch to break phase
+          eyeRest.phase = 'breaking';
+          eyeRest.remaining = eyeRest.breakMin * 60;
+          document.getElementById('eye-rest-status-badge').className = 'eye-rest-badge breaking';
+        } else {
+          // Switch back to study phase
+          eyeRest.phase = 'studying';
+          eyeRest.remaining = eyeRest.studyMin * 60;
+          document.getElementById('eye-rest-status-badge').className = 'eye-rest-badge studying';
+        }
+      }
+
+      updateEyeRestBadge();
+    }
+
+    function updateEyeRestBadge() {
+      const statusText = document.getElementById('eye-rest-status-text');
+      const m = Math.floor(eyeRest.remaining / 60);
+      const s = eyeRest.remaining % 60;
+      const timeStr = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+
+      if (eyeRest.phase === 'studying') {
+        statusText.innerText = `📖 ${timeStr}`;
+      } else if (eyeRest.phase === 'breaking') {
+        statusText.innerText = `😌 ${timeStr}`;
+      }
     }
 
     // Init App

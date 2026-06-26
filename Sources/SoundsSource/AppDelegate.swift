@@ -2,12 +2,18 @@ import AppKit
 import SwiftUI
 import UI
 import Engine
+import Core
 
 @available(macOS 14.2, *)
 @MainActor
 public class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
+
+    // Eye-rest timer dependencies (7.1, 7.3)
+    private var breakTimerManager: BreakTimerManager?
+    private var inputBlocker: InputBlocker?
+    private var overlayController: BreakOverlayController?
     
     public func applicationDidFinishLaunching(_ notification: Notification) {
         // Redirect stdout and stderr to a file for persistent logging
@@ -37,6 +43,32 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Initialize AudioEngineManager
         _ = AudioEngineManager.shared
+
+        // 7.1: Initialise eye-rest timer subsystem
+        let btm = BreakTimerManager.shared
+        let blocker = InputBlocker()
+        let overlayCtrl = BreakOverlayController(manager: btm)
+
+        btm.inputBlocker = blocker
+        btm.overlayController = overlayCtrl
+
+        // 6.7: Status item update hook — set title during cycle, restore icon at idle
+        btm.onStatusItemUpdate = { [weak self] title in
+            guard let self, let button = self.statusItem?.button else { return }
+            if let title, !title.isEmpty {
+                button.image = nil
+                button.title = title
+            } else {
+                button.title = ""
+                button.image = NSImage(systemSymbolName: "waveform",
+                                       accessibilityDescription: "SoundsSource")
+            }
+        }
+
+        self.breakTimerManager = btm
+        self.inputBlocker = blocker
+        self.overlayController = overlayCtrl
+
         print("SoundsSource: AppDelegate initialized successfully.")
     }
     
@@ -49,5 +81,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
         }
+    }
+
+    // 7.2: Graceful teardown — ensures tap removed, overlay hidden, audio restored
+    public func applicationWillTerminate(_ notification: Notification) {
+        breakTimerManager?.teardownOnTerminate()
     }
 }

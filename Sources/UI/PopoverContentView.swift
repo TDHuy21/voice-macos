@@ -54,10 +54,21 @@ public struct PopoverContentView: View {
             
             Rectangle().fill(DS.stroke).frame(height: DS.borderWidth)
 
-            // App List
-            ProcessListView(processes: visibleProcesses)
+            // Combined scrollable area: app list + eye-rest timer panel
+            ScrollView {
+                VStack(spacing: 0) {
+                    // App List (no longer needs its own scroll / maxHeight)
+                    ProcessListView(processes: visibleProcesses)
 
-            Rectangle().fill(DS.stroke).frame(height: DS.borderWidth)
+                    Divider().background(DS.stroke)
+
+                    // Eye-rest timer panel (5.1–5.4)
+                    EyeRestTimerView()
+                        .padding(.horizontal, DS.m)
+                        .padding(.vertical, DS.s)
+                }
+            }
+            .frame(maxHeight: 420)
 
             // Footer — Save Preset & Quit
             HStack {
