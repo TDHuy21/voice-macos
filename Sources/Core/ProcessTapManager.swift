@@ -309,7 +309,7 @@ private let tapIOProc: AudioDeviceIOProc = { inDevice, _, inInputData, _, _, _, 
     var wrote = 0
     for (i, buffer) in buffers.enumerated() {
         if i < ringBuffers.count, let mData = buffer.mData, buffer.mDataByteSize > 0 {
-            ringBuffers[i].write(mData, byteCount: Int(buffer.mDataByteSize))
+            ringBuffers[i].writeOverwriting(mData, byteCount: Int(buffer.mDataByteSize))
             wrote += Int(buffer.mDataByteSize)
         }
     }

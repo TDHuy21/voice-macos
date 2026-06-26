@@ -34,13 +34,27 @@ public struct PopoverContentView: View {
     
     public var body: some View {
         VStack(spacing: 0) {
-            // Header: Title & Preset + Output Device Picker
-            HStack(spacing: 8) {
-                HStack(spacing: 4) {
+            // Header — serif wordmark (signature detail) + device, then preset row
+            VStack(spacing: DS.m) {
+                HStack(spacing: DS.s) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(DS.accent)
                     Text("SoundsSource")
-                        .font(.system(size: 13, weight: .black))
-                        .foregroundColor(.cyan)
-                    
+                        .font(DSFont.wordmark)
+                        .foregroundStyle(DS.textPrimary)
+
+                    Spacer(minLength: DS.s)
+
+                    OutputDevicePicker(selection: Bindable(engineManager).selectedDeviceID)
+                }
+
+                HStack(spacing: DS.s) {
+                    Text("PRESET")
+                        .font(DSFont.label)
+                        .tracking(0.8)
+                        .foregroundStyle(DS.textTertiary)
+
                     Picker("", selection: $selectedPresetName) {
                         ForEach(store.presets) { preset in
                             Text(preset.name).tag(preset.name)
@@ -49,73 +63,76 @@ public struct PopoverContentView: View {
                     .pickerStyle(.menu)
                     .labelsHidden()
                     .controlSize(.small)
-                    .frame(width: 85)
+                    .tint(DS.accent)
+                    .frame(width: 120)
                     .onChange(of: selectedPresetName) { _, newValue in
                         engineManager.loadPreset(name: newValue)
                     }
+
+                    Spacer()
                 }
-                
-                Spacer(minLength: 4)
-                
-                OutputDevicePicker(selection: Bindable(engineManager).selectedDeviceID)
             }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 12)
-            .background(Color.white.opacity(0.04))
-            
-            Divider()
-                .background(Color.white.opacity(0.08))
-            
+            .padding(.horizontal, DS.l)
+            .padding(.vertical, DS.m)
+            .background(DS.surface)
+
+            Rectangle().fill(DS.stroke).frame(height: 1)
+
             // App List
             ProcessListView(processes: visibleProcesses)
-            
-            Divider()
-                .background(Color.white.opacity(0.08))
-            
-            // Footer: Save Preset & Quit App
+
+            Rectangle().fill(DS.stroke).frame(height: 1)
+
+            // Footer — Save Preset & Quit
             HStack {
                 Button(action: { showSaveAlert = true }) {
-                    Label("Save Preset", systemImage: "plus.circle")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.white.opacity(0.55))
+                    Label("Save Preset", systemImage: "plus.circle.fill")
+                        .font(DSFont.caption)
+                        .foregroundStyle(DS.textSecondary)
                 }
                 .buttonStyle(.plain)
-                
+
                 Spacer()
-                
+
                 Button(action: { NSApp.terminate(nil) }) {
-                    Text("Quit SoundsSource")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.red.opacity(0.75))
+                    Text("Quit")
+                        .font(DSFont.caption)
+                        .foregroundStyle(DS.danger.opacity(0.85))
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 12)
-            .background(Color.white.opacity(0.02))
+            .padding(.horizontal, DS.l)
+            .padding(.vertical, DS.m)
+            .background(DS.surface)
         }
         .frame(width: 360)
+        .background(DS.bg)
+        .tint(DS.accent)
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showSaveAlert) {
-            VStack(spacing: 12) {
-                Text("Save Current Preset")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
-                
-                TextField("Preset Name", text: $newPresetName)
+            VStack(alignment: .leading, spacing: DS.m) {
+                Text("Save Preset")
+                    .font(.system(size: 14, weight: .bold, design: .serif))
+                    .foregroundStyle(DS.textPrimary)
+
+                Text("Capture the current EQ, volume and routing for every active app.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(DS.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                TextField("Preset name", text: $newPresetName)
                     .textFieldStyle(.roundedBorder)
-                    .controlSize(.small)
-                    .frame(width: 180)
-                
-                HStack {
+                    .controlSize(.regular)
+                    .tint(DS.accent)
+
+                HStack(spacing: DS.s) {
+                    Spacer()
                     Button("Cancel") {
                         showSaveAlert = false
                         newPresetName = ""
                     }
-                    .controlSize(.small)
-                    
-                    Spacer()
-                    
+                    .controlSize(.regular)
+
                     Button("Save") {
                         if !newPresetName.isEmpty {
                             engineManager.saveCurrentStateAsPreset(name: newPresetName)
@@ -124,14 +141,15 @@ public struct PopoverContentView: View {
                         showSaveAlert = false
                         newPresetName = ""
                     }
-                    .controlSize(.small)
+                    .controlSize(.regular)
                     .buttonStyle(.borderedProminent)
+                    .tint(DS.accent)
+                    .disabled(newPresetName.isEmpty)
                 }
-                .frame(width: 180)
             }
-            .padding(14)
-            .frame(width: 220)
-            .background(Color(NSColor.windowBackgroundColor))
+            .padding(DS.l)
+            .frame(width: 260)
+            .background(DS.surface)
         }
         .onReceive(refreshTimer) { _ in
             enumerator.refresh()

@@ -1,10 +1,9 @@
-import Testing
+import XCTest
 import Foundation
 @testable import Engine
 
 @MainActor
-@Suite("PresetStore (observable facade)")
-struct PresetStoreTests {
+final class PresetStoreTests: XCTestCase {
     let url = URL(fileURLWithPath: "/virtual/presets.json")
 
     /// Fresh store backed by an in-memory file store (no disk, no shared singleton).
@@ -14,67 +13,61 @@ struct PresetStoreTests {
         return (PresetStore(fileStore: fs, fileURL: url), fs)
     }
 
-    @Test("seeds a default Flat preset on first launch")
-    func seedsFlat() throws {
+    func testSeedsFlat() throws {
         let (store, _) = try makeStore()
-        #expect(store.presets.count == 1)
-        #expect(store.defaultPreset?.name == "Flat")
+        XCTAssertEqual(store.presets.count, 1)
+        XCTAssertEqual(store.defaultPreset?.name, "Flat")
     }
 
-    @Test("savePreset appends a new preset")
-    func saveAppends() throws {
+    func testSaveAppends() throws {
         let (store, _) = try makeStore(seed: [Preset(name: "Flat", isDefault: true, appSettings: [:])])
         store.savePreset(name: "Bass", appSettings: ["com.app": .flat])
-        #expect(store.presets.map(\.name) == ["Flat", "Bass"])
+        XCTAssertEqual(store.presets.map(\.name), ["Flat", "Bass"])
     }
 
-    @Test("savePreset updates an existing preset in place")
-    func saveUpdates() throws {
+    func testSaveUpdates() throws {
         let (store, _) = try makeStore(seed: [Preset(name: "Flat", isDefault: true, appSettings: [:])])
         store.savePreset(name: "Flat", appSettings: ["com.app": .flat])
-        #expect(store.presets.count == 1)
-        #expect(store.presets[0].appSettings["com.app"] == .flat)
+        XCTAssertEqual(store.presets.count, 1)
+        XCTAssertEqual(store.presets[0].appSettings["com.app"], .flat)
     }
 
-    @Test("deleting the default reassigns default to the first remaining preset")
-    func deleteReassignsDefault() throws {
+    func testDeleteReassignsDefault() throws {
         let (store, _) = try makeStore(seed: [
             Preset(name: "Flat", isDefault: true, appSettings: [:]),
             Preset(name: "Bass", isDefault: false, appSettings: [:])
         ])
         store.deletePreset(name: "Flat")
-        #expect(store.presets.count == 1)
-        #expect(store.defaultPreset?.name == "Bass")
+        XCTAssertEqual(store.presets.count, 1)
+        XCTAssertEqual(store.defaultPreset?.name, "Bass")
     }
 
-    @Test("renamePreset changes the name; no-ops on empty/identical names")
-    func rename() throws {
+    func testRename() throws {
         let (store, _) = try makeStore(seed: [Preset(name: "Flat", isDefault: true, appSettings: [:])])
         store.renamePreset(oldName: "Flat", newName: "Neutral")
-        #expect(store.defaultPreset?.name == "Neutral")
+        XCTAssertEqual(store.defaultPreset?.name, "Neutral")
 
         store.renamePreset(oldName: "Neutral", newName: "")
-        #expect(store.presets[0].name == "Neutral") // unchanged
+        XCTAssertEqual(store.presets[0].name, "Neutral") // unchanged
     }
 
-    @Test("setDefaultPreset moves the default flag exclusively")
-    func setDefault() throws {
+    func testSetDefault() throws {
         let (store, _) = try makeStore(seed: [
             Preset(name: "Flat", isDefault: true, appSettings: [:]),
             Preset(name: "Bass", isDefault: false, appSettings: [:])
         ])
         store.setDefaultPreset(name: "Bass")
-        #expect(store.defaultPreset?.name == "Bass")
-        #expect(store.presets.filter(\.isDefault).count == 1)
+        XCTAssertEqual(store.defaultPreset?.name, "Bass")
+        XCTAssertEqual(store.presets.filter(\.isDefault).count, 1)
     }
 
-    @Test("mutations are persisted through the actor to the file store")
-    func persistsToDisk() async throws {
+    func testPersistsToDisk() async throws {
         let (store, fs) = try makeStore(seed: [Preset(name: "Flat", isDefault: true, appSettings: [:])])
         store.savePreset(name: "Bass", appSettings: [:])
         await store.flush() // wait for the off-main-thread write
 
-        let persisted = try JSONDecoder().decode([Preset].self, from: #require(fs.files[url]))
-        #expect(persisted.map(\.name) == ["Flat", "Bass"])
+        let data = try XCTUnwrap(fs.files[url])
+        let persisted = try JSONDecoder().decode([Preset].self, from: data)
+        XCTAssertEqual(persisted.map(\.name), ["Flat", "Bass"])
     }
 }

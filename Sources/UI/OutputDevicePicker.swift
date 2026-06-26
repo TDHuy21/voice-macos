@@ -15,11 +15,11 @@ public struct OutputDevicePicker: View {
     }
     
     public var body: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "speaker.wave.2.fill")
-                .foregroundColor(.cyan)
-                .font(.system(size: 10, weight: .bold))
-            
+        HStack(spacing: DS.xs) {
+            Image(systemName: "hifispeaker.fill")
+                .foregroundStyle(DS.accent)
+                .font(.system(size: 10, weight: .semibold))
+
             Picker("", selection: $selection) {
                 if includeDefault {
                     Text("Default Output").tag(kAudioObjectUnknown)
@@ -31,12 +31,17 @@ public struct OutputDevicePicker: View {
             .pickerStyle(.menu)
             .labelsHidden()
             .controlSize(.small)
-            .frame(minWidth: 110, maxWidth: 160)
+            .tint(DS.accent)
+            .frame(minWidth: 104, maxWidth: 150)
             .help("Select output audio device")
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .background(Color.white.opacity(0.06))
-        .cornerRadius(6)
+        .padding(.horizontal, DS.s)
+        .padding(.vertical, DS.xs)
+        .background(DS.surfaceHi)
+        .clipShape(RoundedRectangle(cornerRadius: DS.radiusS))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.radiusS)
+                .strokeBorder(DS.stroke, lineWidth: 1)
+        )
     }
 }

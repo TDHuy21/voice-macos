@@ -13,16 +13,21 @@ public struct ProcessListView: View {
         ScrollView {
             VStack(spacing: 0) {
                 if processes.isEmpty {
-                    VStack(spacing: 10) {
-                        Image(systemName: "speaker.minus")
-                            .font(.system(size: 26))
-                            .foregroundColor(.white.opacity(0.15))
-                        
-                        Text("No apps playing audio")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.35))
+                    VStack(spacing: DS.m) {
+                        Image(systemName: "speaker.wave.2")
+                            .font(.system(size: 24, weight: .light))
+                            .foregroundStyle(DS.textTertiary.opacity(0.6))
+
+                        VStack(spacing: DS.xs) {
+                            Text("No audio apps running")
+                                .font(DSFont.caption)
+                                .foregroundStyle(DS.textSecondary)
+                            Text("Open an app like Spotify or Chrome to get started")
+                                .font(.system(size: 10))
+                                .foregroundStyle(DS.textTertiary)
+                        }
                     }
-                    .frame(height: 140)
+                    .frame(height: 150)
                     .frame(maxWidth: .infinity)
                 } else {
                     ForEach(processes) { process in
