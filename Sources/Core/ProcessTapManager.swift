@@ -30,6 +30,7 @@ public class ProcessTapManager: @unchecked Sendable {
     private init() {}
 
     public func startTapping(bundleID: String, pid: pid_t) -> ([RingBuffer], AudioStreamBasicDescription)? {
+        print("ProcessTapManager: startTapping for \(bundleID) with PID \(pid)")
         lock.lock()
         defer { lock.unlock() }
 
@@ -37,16 +38,61 @@ public class ProcessTapManager: @unchecked Sendable {
             return (active.ringBuffers, active.format)
         }
 
-        guard let processObjectID = getProcessObjectID(pid: pid) else {
-            print("ProcessTapManager: Could not find process object ID for PID \(pid)")
+        var processObjectIDs = getProcessObjectIDs(for: bundleID)
+        if processObjectIDs.isEmpty {
+            if let processObjectID = getProcessObjectID(pid: pid) {
+                processObjectIDs.append(processObjectID)
+            }
+        }
+
+        guard !processObjectIDs.isEmpty else {
+            print("ProcessTapManager: Could not find any process object IDs for \(bundleID) (PID \(pid))")
             return nil
         }
 
-        let description = CATapDescription(stereoMixdownOfProcesses: [processObjectID])
+        print("ProcessTapManager: Tapping \(processObjectIDs.count) process objects for \(bundleID)")
+        let description = CATapDescription(stereoMixdownOfProcesses: processObjectIDs)
         description.name = "SoundsSource Tap (\(bundleID))"
         description.muteBehavior = CATapMuteBehavior.muted
 
         return createAndStartTap(key: bundleID, description: description)
+    }
+
+    private func getProcessObjectIDs(for bundleID: String) -> [AudioObjectID] {
+        guard !bundleID.isEmpty else { return [] }
+        var address = AudioObjectPropertyAddress(
+            mSelector: 0x70727323, // 'prs#'
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var size: UInt32 = 0
+        let systemObjectID = AudioObjectID(kAudioObjectSystemObject)
+        var status = AudioObjectGetPropertyDataSize(systemObjectID, &address, 0, nil, &size)
+        guard status == noErr else { return [] }
+        
+        let count = Int(size) / MemoryLayout<AudioObjectID>.size
+        var processIDs = [AudioObjectID](repeating: 0, count: count)
+        status = AudioObjectGetPropertyData(systemObjectID, &address, 0, nil, &size, &processIDs)
+        guard status == noErr else { return [] }
+        
+        var matches: [AudioObjectID] = []
+        for processID in processIDs {
+            var bundleAddress = AudioObjectPropertyAddress(
+                mSelector: 0x70626964, // 'pbid'
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var bundleIDCF: Unmanaged<CFString>? = nil
+            var bundleIDSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+            let s = AudioObjectGetPropertyData(processID, &bundleAddress, 0, nil, &bundleIDSize, &bundleIDCF)
+            if s == noErr, let cf = bundleIDCF {
+                let bid = cf.takeRetainedValue() as String
+                if bid == bundleID {
+                    matches.append(processID)
+                }
+            }
+        }
+        return matches
     }
 
     public func startSystemGlobalTap() -> ([RingBuffer], AudioStreamBasicDescription)? {
@@ -313,17 +359,25 @@ private let tapIOProc: AudioDeviceIOProc = { inDevice, _, inInputData, _, _, _, 
 
     let buffers = UnsafeBufferPointer(start: firstBufferPtr, count: Int(numberBuffers))
     var wrote = 0
+    var sumVal: Float = 0.0
     for (i, buffer) in buffers.enumerated() {
         if i < ringBuffers.count, let mData = buffer.mData, buffer.mDataByteSize > 0 {
             ringBuffers[i].writeOverwriting(mData, byteCount: Int(buffer.mDataByteSize))
             wrote += Int(buffer.mDataByteSize)
+            
+            // Calculate sum of samples for debugging
+            let floatCount = Int(buffer.mDataByteSize) / MemoryLayout<Float>.size
+            let ptr = mData.assumingMemoryBound(to: Float.self)
+            for j in 0..<min(floatCount, 512) {
+                sumVal += abs(ptr[j])
+            }
         }
     }
 
     tapDbgCalls += 1
     tapDbgBytes += wrote
     if tapDbgCalls % 100 == 0 {
-        print("TAP[capture]: calls=\(tapDbgCalls) lastWrote=\(wrote)B numBuffers=\(numberBuffers) ringAvail=\(ringBuffers.first?.bytesAvailableForRead ?? -1)B")
+        print("TAP[capture]: calls=\(tapDbgCalls) lastWrote=\(wrote)B numBuffers=\(numberBuffers) ringAvail=\(ringBuffers.first?.bytesAvailableForRead ?? -1)B sumSamples=\(sumVal)")
     }
 
     return noErr

@@ -156,7 +156,22 @@ public class AppAudioNode: @unchecked Sendable {
             }
 
             let vol = localVolumeContainer.volume
-            if vol < 1.0 {
+            if renderDbgCalls % 300 == 0 {
+                let buffers = UnsafeMutableAudioBufferListPointer(ioData)
+                var sumVal: Float = 0.0
+                if let firstBuf = buffers.first, let mData = firstBuf.mData {
+                    let ptr = mData.assumingMemoryBound(to: Float.self)
+                    let count = Int(frameCount)
+                    for i in 0..<count {
+                        sumVal += abs(ptr[i])
+                    }
+                }
+                print("RENDER[play]: vol=\(vol) sumSamples=\(sumVal)")
+            }
+            
+            // Apply gain whenever volume isn't unity — both attenuation (< 1.0) and
+            // amplification (> 1.0). A `< 1.0` guard here silently dropped all boost.
+            if vol != 1.0 {
                 let buffers = UnsafeMutableAudioBufferListPointer(ioData)
                 for buffer in buffers {
                     if let mData = buffer.mData {

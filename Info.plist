@@ -22,5 +22,7 @@
     <string>14.2</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>SoundsSource requires microphone access to tap and process application audio.</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>SoundsSource requires system audio capture permission to route and apply EQ to app audio.</string>
 </dict>
 </plist>

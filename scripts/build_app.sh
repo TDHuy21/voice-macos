@@ -38,8 +38,16 @@ fi
 cp "$BINARY_PATH" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 cp Info.plist "$APP_BUNDLE/Contents/Info.plist"
 
-# Sign bundle with entitlements (ad-hoc signing for local execution)
-echo "=== Code Signing App Bundle ==="
-codesign --force --sign - --entitlements entitlements.plist "$APP_BUNDLE"
+# Sign bundle with entitlements. Prefer the stable self-signed identity so macOS
+# remembers the audio-capture permission across rebuilds (ad-hoc changes identity
+# every build → re-prompts). Run scripts/setup_signing_cert.sh once to create it.
+SIGN_IDENTITY="SoundsSource Self-Signed"
+if security find-identity -p codesigning | grep -q "$SIGN_IDENTITY"; then
+    echo "=== Code Signing with stable identity: $SIGN_IDENTITY ==="
+    codesign --force --sign "$SIGN_IDENTITY" --entitlements entitlements.plist "$APP_BUNDLE"
+else
+    echo "=== No stable identity — ad-hoc signing (run scripts/setup_signing_cert.sh to stop repeated permission prompts) ==="
+    codesign --force --sign - --entitlements entitlements.plist "$APP_BUNDLE"
+fi
 
 echo "=== Build Complete: $APP_BUNDLE ==="

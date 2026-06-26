@@ -145,6 +145,7 @@ public class AudioEngineManager: @unchecked Sendable {
     public func startAppTapping(bundleID: String, pid: pid_t) {
         guard activeNodes[bundleID] == nil else { return }
         activePIDs[bundleID] = pid
+        print("AudioEngineManager: startAppTapping for \(bundleID) with PID \(pid)")
         
         // Start tapping in ProcessTapManager
         guard let (ringBuffers, tapFormat) = ProcessTapManager.shared.startTapping(bundleID: bundleID, pid: pid) else {

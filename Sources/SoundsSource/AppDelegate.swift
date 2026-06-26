@@ -10,6 +10,15 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private var popover: NSPopover?
     
     public func applicationDidFinishLaunching(_ notification: Notification) {
+        // Redirect stdout and stderr to a file for persistent logging
+        let logPath = "/Users/mac/Documents/GitHub/soundssource/app.log"
+        freopen(logPath, "a", stdout)
+        freopen(logPath, "a", stderr)
+        setbuf(stdout, nil)
+        setbuf(stderr, nil)
+        
+        print("\n--- APP LAUNCHED (App Bundle) ---")
+        
         // Create Popover
         let popover = NSPopover()
         popover.contentSize = NSSize(width: 360, height: 440)

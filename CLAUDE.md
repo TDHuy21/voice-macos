@@ -1,7 +1,71 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+SoundsSource is a macOS menu-bar app for per-application audio control: capture any app's audio, then set its own volume, mute, 10-band EQ, and output device. It is built on Apple's Core Audio **process-tap** API (`CATapDescription`, `AudioHardwareCreateProcessTap`), which only exists on **macOS 14.2+** — hence almost every type is gated behind `@available(macOS 14.2, *)`.
+
+## Commands
+
+```bash
+# Build the executable (SwiftPM)
+swift build                      # debug
+swift build -c release
+
+# Assemble + ad-hoc-sign the .app bundle (required to actually run — see below)
+./scripts/build_app.sh           # release → build/SoundsSource.app
+./scripts/build_app.sh --debug   # debug build
+./scripts/build_dmg.sh           # package build/SoundsSource.dmg
+
+open build/SoundsSource.app      # launch
+
+# Tests (XCTest suite in the EngineTests target)
+./scripts/test.sh                                   # full suite
+./scripts/test.sh --filter PresetStoreTests         # one test class
+./scripts/test.sh --filter PresetStoreTests/testRename   # one test method
+```
+
+**Always run tests via `./scripts/test.sh`, not `swift test` directly.** Under Command Line Tools (no full Xcode), SwiftPM doesn't add the Swift Testing framework's search/runtime paths; the script passes them explicitly. With a full Xcode install the flags are harmless.
+
+**You cannot just `swift run` this app.** Audio capture requires running **unsandboxed** with the `com.apple.security.system-audio-capture` entitlement (see `entitlements.plist`), which only takes effect on a code-signed bundle. `build_app.sh` copies the binary + `Info.plist` into the bundle and applies an ad-hoc signature (`codesign --sign -`). The first launch also prompts for the microphone/recording permission, which must be granted or no audio flows.
+
+## Architecture
+
+Four SwiftPM targets in a strict dependency stack (`Package.swift`); upper layers depend only downward:
+
+```
+SoundsSource (executable: menu-bar app, AppDelegate)
+  └─ UI       (SwiftUI popover, app rows, EQ curve editor)
+       └─ Engine   (AVAudioEngine graph, routing, EQ, preset persistence)
+            └─ Core (Core Audio process taps, process enumeration, RingBuffer)
+```
+
+### The audio pipeline (the part that requires reading several files)
+
+The signal path crosses a real-time boundary via lock-free ring buffers:
+
+1. **`Core/ProcessTapManager`** creates a `CATapDescription` for an app's process object(s), wraps it in a **private aggregate device** (a process tap is not itself an `AudioDevice`, so the aggregate bridges it to `AudioDeviceCreateIOProcID`), and registers a C IOProc. That IOProc runs on the **real-time audio thread** and must stay allocation-free — it only `writeOverwriting`s captured bytes into `Core/RingBuffer` instances (one per channel when non-interleaved).
+2. **`Engine/AudioEngineManager`** (the central `@MainActor @Observable` singleton, `.shared`) owns one **`OutputDeviceEngine` (an `AVAudioEngine`) per output device**. Each tapped app becomes an **`Engine/AppAudioNode`** connected to that engine's mixer on its own dynamically allocated bus. This is what enables routing different apps to different devices simultaneously.
+3. **`Engine/AppAudioNode`** holds an `AVAudioSourceNode` whose render block (also real-time) pulls from the ring buffers — directly when formats match, or through an `AudioConverter` when the tap format differs from the engine format — then applies per-app volume and feeds the `SpectrumTap` analyzer. The EQ is an `AVAudioUnitEQ` (10 bands) sitting between the source node and the mixer, driven by `Engine/EQController`.
+
+All per-app state in `AudioEngineManager` (volume, mute, routing, EQ) is **keyed by bundle ID**, not PID. Settings for apps that aren't currently tapped are held in `cachedAppSettings` and re-applied when the app starts playing again.
+
+### State, persistence, and device-following conventions
+
+- **`Engine/PresetStore`** (`@MainActor @Observable`, `.shared`) is the SwiftUI-observed source of truth for presets. It delegates all disk I/O to the **`Engine/PresetRepository` actor** (off the main thread; see the `swift-actor-persistence` skill). Saves are fire-and-forget but **chained through `pendingSave`** so rapid mutations land on disk in order; `flush()` awaits the in-flight write (used at termination and in tests). `FileStoring` is injected so tests use `InMemoryFileStore` instead of touching disk. Presets persist to `~/Library/Application Support/SoundsSource/presets.json`.
+- **Device following:** `selectedDeviceID` follows the system default output until the user makes an explicit pick (`followsSystemDefault` flips to false). The `_suppressFollowReset` flag lets internal listeners update `selectedDeviceID` *without* counting as a user pick. Don't remove these flags without understanding the Core Audio property listeners in `setupListeners()`.
+- **Helper-process resolution:** Browsers (Chrome, Cốc Cốc, Edge) and Electron apps (Discord) emit audio from child *Helper* processes with no `NSRunningApplication`. `Core/AudioProcessEnumerator.resolveOwningApp` walks the parent-PID chain (sysctl) and falls back to bundle-ID prefix matching so the UI shows the real parent app's name + icon.
+
+### Conventions & gotchas
+
+- **Hard-coded Core Audio four-char-code selectors.** Many `AudioObjectPropertySelector`s are written as raw hex (e.g. `0x70727323` = `'prs#'`, `'pbid'`, `'tuid'`, `'tfmt'`, `'id2p'`) with the FourCC in a comment, because the named SDK constants don't reliably resolve under the Swift 6 / Command Line Tools toolchain. Follow that pattern rather than assuming a constant exists.
+- **Teardown order is load-bearing.** In `ProcessTapManager.stopTapping`, the aggregate device must be stopped/destroyed *before* the tap (`AudioHardwareDestroyProcessTap`) — the aggregate holds a reference to the tap. Reordering causes a dangling HAL reference.
+- **Concurrency model:** real-time callbacks and Core Audio bridges use `@unchecked Sendable` and `nonisolated(unsafe)` deliberately. Code on the IOProc / render thread must not allocate, lock, or call back into `@MainActor` state.
+- **Known wart:** `SoundsSource/AppDelegate.swift` redirects stdout/stderr to a **hard-coded absolute log path** (`/Users/mac/Documents/GitHub/soundssource/app.log`). If you touch `applicationDidFinishLaunching`, this is worth fixing/parameterizing rather than copying.
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **voice-macos** (838 symbols, 1879 relationships, 45 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **voice-macos** (1017 symbols, 2190 relationships, 47 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
