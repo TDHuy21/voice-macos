@@ -2,6 +2,10 @@ import Foundation
 import CoreGraphics
 import AppKit
 
+public extension Notification.Name {
+    static let popoverShouldResize = Notification.Name("popoverShouldResize")
+}
+
 // MARK: - Protocols (defined in Core so Engine can import them)
 
 @available(macOS 14.2, *)

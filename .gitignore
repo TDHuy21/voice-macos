@@ -33,3 +33,4 @@ DerivedData/
 # OpenSpec (local changes and specification templates)
 .agent/
 openspec/
+.agents/

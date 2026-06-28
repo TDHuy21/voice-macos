@@ -12,6 +12,7 @@ public struct PopoverContentView: View {
     @State private var selectedPresetName: String = "Flat"
     @State private var showSaveAlert = false
     @State private var newPresetName = ""
+    @State private var showTodo = UserDefaults.standard.bool(forKey: "todos_showTodo")
 
     // Poll the audio process list while the popover is open. CoreAudio's process-object
     // list listener only fires when processes are added/removed — not when an already
@@ -33,86 +34,112 @@ public struct PopoverContentView: View {
     }
     
     public var body: some View {
-        VStack(spacing: 0) {
-            // Header — playful cartoon logo + device
-            HStack(spacing: DS.s) {
-                Image(systemName: "music.note.house.fill")
-                    .font(.system(size: 15, weight: .black))
-                    .foregroundStyle(DS.accentGradient)
+        HStack(spacing: 0) {
+            // Left column (fixed 360 wide)
+            VStack(spacing: 0) {
+                // Header — playful cartoon logo + device
+                HStack(spacing: DS.s) {
+                    Image(systemName: "music.note.house.fill")
+                        .font(.system(size: 15, weight: .black))
+                        .foregroundStyle(DS.accentGradient)
+                    
+                    Text("Minh Thw ☁️")
+                        .font(DSFont.wordmark)
+                        .foregroundStyle(DS.textPrimary)
+
+                    Spacer(minLength: DS.s)
+
+                    Button(action: {
+                        showTodo.toggle()
+                        UserDefaults.standard.set(showTodo, forKey: "todos_showTodo")
+                        NotificationCenter.default.post(
+                            name: .popoverShouldResize,
+                            object: nil,
+                            userInfo: ["width": showTodo ? CGFloat(600) : CGFloat(360)]
+                        )
+                    }) {
+                        Image(systemName: showTodo ? "sidebar.right" : "sidebar.left")
+                            .font(.system(size: 14, weight: .bold))
+                    }
+                    .buttonStyle(.borderless)
+
+                    OutputDevicePicker(selection: Bindable(engineManager).selectedDeviceID)
+                }
+                .padding(.horizontal, DS.l)
+                .padding(.vertical, DS.m + 2)
+                .background(DS.surface)
                 
-                Text("Minh Thw ☁️")
-                    .font(DSFont.wordmark)
-                    .foregroundStyle(DS.textPrimary)
+                Rectangle().fill(DS.stroke).frame(height: DS.borderWidth)
 
-                Spacer(minLength: DS.s)
+                // Combined scrollable area: app list + eye-rest timer panel
+                ScrollView {
+                    VStack(spacing: 0) {
+                        // App List (no longer needs its own scroll / maxHeight)
+                        ProcessListView(processes: visibleProcesses)
 
-                OutputDevicePicker(selection: Bindable(engineManager).selectedDeviceID)
-            }
-            .padding(.horizontal, DS.l)
-            .padding(.vertical, DS.m + 2)
-            .background(DS.surface)
-            
-            Rectangle().fill(DS.stroke).frame(height: DS.borderWidth)
+                        Divider().background(DS.stroke)
 
-            // Combined scrollable area: app list + eye-rest timer panel
-            ScrollView {
-                VStack(spacing: 0) {
-                    // App List (no longer needs its own scroll / maxHeight)
-                    ProcessListView(processes: visibleProcesses)
-
-                    Divider().background(DS.stroke)
-
-                    // Eye-rest timer panel (5.1–5.4)
-                    EyeRestTimerView()
-                        .padding(.horizontal, DS.m)
-                        .padding(.vertical, DS.s)
+                        // Eye-rest timer panel (5.1–5.4)
+                        EyeRestTimerView()
+                            .padding(.horizontal, DS.m)
+                            .padding(.vertical, DS.s)
+                    }
                 }
-            }
-            .frame(maxHeight: 420)
+                .frame(maxHeight: 420)
 
-            // Footer — Save Preset & Quit
-            HStack {
-                Button(action: { showSaveAlert = true }) {
-                    Label("Save Preset", systemImage: "plus.circle")
-                        .font(DSFont.caption)
-                        .fontWeight(.bold)
-                        .foregroundStyle(DS.textSecondary)
-                        .padding(.horizontal, DS.m)
-                        .padding(.vertical, DS.xs + 3)
-                        .background(DS.surfaceHi)
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(DS.stroke, lineWidth: DS.borderWidth)
-                        )
+                // Footer — Save Preset & Quit
+                HStack {
+                    Button(action: { showSaveAlert = true }) {
+                        Label("Save Preset", systemImage: "plus.circle")
+                            .font(DSFont.caption)
+                            .fontWeight(.bold)
+                            .foregroundStyle(DS.textSecondary)
+                            .padding(.horizontal, DS.m)
+                            .padding(.vertical, DS.xs + 3)
+                            .background(DS.surfaceHi)
+                            .clipShape(Capsule())
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(DS.stroke, lineWidth: DS.borderWidth)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffectHelper()
+
+                    Spacer()
+
+                    Button(action: { NSApp.terminate(nil) }) {
+                        Text("Quit")
+                            .font(DSFont.caption)
+                            .fontWeight(.bold)
+                            .foregroundStyle(DS.danger)
+                            .padding(.horizontal, DS.m + 4)
+                            .padding(.vertical, DS.xs + 3)
+                            .background(DS.danger.opacity(0.12))
+                            .clipShape(Capsule())
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(DS.stroke, lineWidth: DS.borderWidth)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffectHelper()
                 }
-                .buttonStyle(.plain)
-                .hoverEffectHelper()
-
-                Spacer()
-
-                Button(action: { NSApp.terminate(nil) }) {
-                    Text("Quit")
-                        .font(DSFont.caption)
-                        .fontWeight(.bold)
-                        .foregroundStyle(DS.danger)
-                        .padding(.horizontal, DS.m + 4)
-                        .padding(.vertical, DS.xs + 3)
-                        .background(DS.danger.opacity(0.12))
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(DS.stroke, lineWidth: DS.borderWidth)
-                        )
-                }
-                .buttonStyle(.plain)
-                .hoverEffectHelper()
+                .padding(.horizontal, DS.l)
+                .padding(.vertical, DS.m)
+                .background(DS.surface)
             }
-            .padding(.horizontal, DS.l)
-            .padding(.vertical, DS.m)
-            .background(DS.surface)
+            .frame(width: 360)
+
+            if showTodo {
+                Rectangle().fill(DS.stroke).frame(width: DS.borderWidth)
+
+                // Right column (Todo List)
+                TodoListView()
+                    .frame(width: 240)
+            }
         }
-        .frame(width: 360)
+        .frame(width: showTodo ? 600 : 360)
         .background(
             VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
                 .overlay(DS.bg.opacity(0.95))
@@ -168,6 +195,7 @@ public struct PopoverContentView: View {
         }
         .onReceive(refreshTimer) { _ in
             enumerator.refresh()
+            TodoStore.shared.refreshDayAnchorIfNeeded()
         }
         .onAppear {
             enumerator.refresh()

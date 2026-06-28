@@ -1,12 +1,11 @@
-import XCTest
+import Testing
 import AVFoundation
 @testable import Engine
 @testable import Core
 
-@available(macOS 14.2, *)
-final class AudioEngineIntegrationTests: XCTestCase {
+@Suite struct AudioEngineIntegrationTests {
     
-    func testOfflineRenderingFlow() throws {
+    @Test func offlineRenderingFlow() throws {
         let sampleRate: Double = 48000.0
         let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)!
         
@@ -33,7 +32,7 @@ final class AudioEngineIntegrationTests: XCTestCase {
         let bytesWritten = sineData.withUnsafeBufferPointer { ptr in
             ringBuffer.write(ptr.baseAddress!, byteCount: framesCount * 2 * MemoryLayout<Float>.size)
         }
-        XCTAssertEqual(bytesWritten, framesCount * 2 * MemoryLayout<Float>.size)
+        #expect(bytesWritten == framesCount * 2 * MemoryLayout<Float>.size)
         
         // 3. Create AppAudioNode (input: 48000Hz stereo interleaved float)
         var tapASBD = AudioStreamBasicDescription()
@@ -46,10 +45,7 @@ final class AudioEngineIntegrationTests: XCTestCase {
         tapASBD.mChannelsPerFrame = 2
         tapASBD.mBitsPerChannel = 32
         
-        guard let appNode = AppAudioNode(ringBuffers: [ringBuffer], sourceFormat: tapASBD, engineFormat: format) else {
-            XCTFail("Failed to create AppAudioNode")
-            return
-        }
+        let appNode = try #require(AppAudioNode(ringBuffers: [ringBuffer], sourceFormat: tapASBD, engineFormat: format), "Failed to create AppAudioNode")
         
         // 4. Attach nodes and connect
         engine.attach(appNode.sourceNode)
@@ -59,7 +55,7 @@ final class AudioEngineIntegrationTests: XCTestCase {
         engine.connect(appNode.eqNode, to: engine.mainMixerNode, format: format)
         
         // Ensure volume is full (1.0)
-        appNode.eqNode.volume = 1.0
+        appNode.volume = 1.0
         
         // 5. Start engine
         try engine.start()
@@ -69,8 +65,8 @@ final class AudioEngineIntegrationTests: XCTestCase {
         
         // 7. Render 512 frames offline
         let status = try engine.renderOffline(512, to: renderBuffer)
-        XCTAssertEqual(status, .success)
-        XCTAssertEqual(renderBuffer.frameLength, 512)
+        #expect(status == .success)
+        #expect(renderBuffer.frameLength == 512)
         
         // 8. Analyze render buffer (calculate Root Mean Square - RMS)
         var sumSquares: Float = 0.0
@@ -85,15 +81,15 @@ final class AudioEngineIntegrationTests: XCTestCase {
         let rms = sqrt(sumSquares / Float(512 * 2))
         
         print("AudioEngineIntegrationTests: RMS with volume 1.0 = \(rms)")
-        XCTAssertGreaterThan(rms, 0.001, "Audio output is silent, but should contain sound samples!")
+        #expect(rms > 0.001)
         
         // 9. Test Volume Control (Set volume to 0.0 / mute)
-        appNode.eqNode.volume = 0.0
+        appNode.volume = 0.0
         
         // Render next 512 frames
         let renderBufferMuted = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 512)!
         let statusMuted = try engine.renderOffline(512, to: renderBufferMuted)
-        XCTAssertEqual(statusMuted, .success)
+        #expect(statusMuted == .success)
         
         var sumSquaresMuted: Float = 0.0
         let channelDataMuted = renderBufferMuted.floatChannelData!
@@ -107,7 +103,7 @@ final class AudioEngineIntegrationTests: XCTestCase {
         let rmsMuted = sqrt(sumSquaresMuted / Float(512 * 2))
         
         print("AudioEngineIntegrationTests: RMS with volume 0.0 = \(rmsMuted)")
-        XCTAssertLessThan(rmsMuted, 0.00001, "Audio output should be silent when volume is 0.0!")
+        #expect(rmsMuted < 0.00001)
         
         // Stop engine
         engine.stop()

@@ -91,7 +91,7 @@ public final class BreakTimerManager {
     private var deadline: Date = .distantFuture
 
     /// Volumes snapshotted before break (bundleID → volume), for ducking restore.
-    private var preBreakVolumes: [String: Float] = [:]
+    var preBreakVolumes: [String: Float] = [:]
 
     /// Whether ducking is active (persisted for crash-safe restore).
     private static let duckingActiveKey = "btm_duckingActive"
@@ -104,6 +104,11 @@ public final class BreakTimerManager {
     public init() {
         setupWorkspaceObservers()
         crashSafeRestoreIfNeeded()
+    }
+
+    deinit {
+        let nc = NSWorkspace.shared.notificationCenter
+        nc.removeObserver(self)
     }
 
     // MARK: - Public API
@@ -153,7 +158,7 @@ public final class BreakTimerManager {
         flashWarningOnStatusItem()
     }
 
-    private func enterBreaking() {
+    func enterBreaking() {
         // 1.8: Guard double-enter.
         guard phase == .warning || phase == .studying else { return }
         phase = .breaking
@@ -399,7 +404,7 @@ public final class BreakTimerManager {
 
     // MARK: - Audio: ducking (6.2–6.6)
 
-    private func duckAudio() {
+    func duckAudio() {
         let manager = AudioEngineManager.shared
         var snapshot: [String: Float] = [:]
 
@@ -418,7 +423,7 @@ public final class BreakTimerManager {
         UserDefaults.standard.set(true, forKey: BreakTimerManager.duckingActiveKey)
     }
 
-    private func unduckAudio() {
+    func unduckAudio() {
         guard !preBreakVolumes.isEmpty else {
             clearDuckingPersistence()
             return
@@ -428,7 +433,12 @@ public final class BreakTimerManager {
             // 6.5: Only restore if still at ducked level (policy (b) fallback);
             // since we lock per-app volume during break (6.5 policy (a)), this is the
             // canonical restore call.
-            manager.setVolume(bundleID: bundleID, volume: vol)
+            let currentVolume = manager.getVolume(bundleID: bundleID)
+            if abs(currentVolume - vol * 0.1) < 0.01 {
+                manager.setVolume(bundleID: bundleID, volume: vol)
+            } else {
+                print("BreakTimerManager: preserving user adjusted volume \(currentVolume) for \(bundleID)")
+            }
         }
         preBreakVolumes = [:]
         clearDuckingPersistence()
@@ -438,13 +448,15 @@ public final class BreakTimerManager {
     public func duckNewNode(bundleID: String) {
         guard phase == .breaking else { return }
         let manager = AudioEngineManager.shared
-        let vol = manager.getVolume(bundleID: bundleID)
-        preBreakVolumes[bundleID] = vol   // record pre-break volume
-        manager.setVolume(bundleID: bundleID, volume: vol * 0.1)
+        if preBreakVolumes[bundleID] == nil {
+            let vol = manager.getVolume(bundleID: bundleID)
+            preBreakVolumes[bundleID] = vol   // record pre-break volume
+            manager.setVolume(bundleID: bundleID, volume: vol * 0.1)
 
-        // Persist updated map.
-        let encoded = preBreakVolumes.mapValues { Double($0) }
-        UserDefaults.standard.set(encoded, forKey: BreakTimerManager.preBreakVolumesKey)
+            // Persist updated map.
+            let encoded = preBreakVolumes.mapValues { Double($0) }
+            UserDefaults.standard.set(encoded, forKey: BreakTimerManager.preBreakVolumesKey)
+        }
     }
 
     private func clearDuckingPersistence() {

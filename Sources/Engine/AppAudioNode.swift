@@ -29,6 +29,12 @@ public class AppAudioNode: @unchecked Sendable {
     }
     
     public init?(ringBuffers: [RingBuffer], sourceFormat: AudioStreamBasicDescription, engineFormat: AVAudioFormat) {
+        let sourceInterleaved = (sourceFormat.mFormatFlags & kAudioFormatFlagIsNonInterleaved) == 0
+        let expectedBufferCount = sourceInterleaved ? 1 : Int(sourceFormat.mChannelsPerFrame)
+        if ringBuffers.isEmpty || ringBuffers.count < expectedBufferCount {
+            return nil
+        }
+        
         self.ringBuffers = ringBuffers
         self.sourceFormat = sourceFormat
         self.engineFormat = engineFormat
@@ -151,6 +157,10 @@ public class AppAudioNode: @unchecked Sendable {
                                 memset(mData, 0, bytesToRead)
                             }
                         }
+                    } else {
+                        if let mData = buffer.mData {
+                            memset(mData, 0, bytesToRead)
+                        }
                     }
                 }
             }
@@ -205,6 +215,12 @@ public class AppAudioNode: @unchecked Sendable {
 // Debug counter (racy, debug-only).
 private nonisolated(unsafe) var renderDbgCalls = 0
 
+private nonisolated(unsafe) let dummyScratch: UnsafeMutableRawPointer = {
+    let ptr = UnsafeMutableRawPointer.allocate(byteCount: 262144, alignment: 16)
+    memset(ptr, 0, 262144)
+    return ptr
+}()
+
 // C-style helper context for AudioConverter.
 // Owns scratch storage the input proc points the converter at — an AudioConverter
 // input proc receives buffers with mData == NULL and is expected to SET mData to
@@ -252,10 +268,15 @@ private let converterInputProc: AudioConverterComplexInputDataProc = { _, ioNumb
     // (returning 0 packets would leave the source node's buffer partially filled).
     if frames == 0 {
         for i in 0..<buffers.count {
-            let s = context.scratch[i < context.scratch.count ? i : 0]
-            memset(s, 0, requestedFrames * bytesPerFrame)
-            buffers[i].mData = s
-            buffers[i].mDataByteSize = UInt32(requestedFrames * bytesPerFrame)
+            if i < context.scratch.count {
+                let s = context.scratch[i]
+                memset(s, 0, requestedFrames * bytesPerFrame)
+                buffers[i].mData = s
+                buffers[i].mDataByteSize = UInt32(requestedFrames * bytesPerFrame)
+            } else {
+                buffers[i].mData = dummyScratch
+                buffers[i].mDataByteSize = UInt32(min(requestedFrames * bytesPerFrame, 262144))
+            }
             buffers[i].mNumberChannels = UInt32(context.channelsPerBuffer)
         }
         ioNumberDataPackets.pointee = UInt32(requestedFrames)
@@ -264,15 +285,20 @@ private let converterInputProc: AudioConverterComplexInputDataProc = { _, ioNumb
 
     // Read ring buffer data into our scratch, then point the converter's input at it.
     for i in 0..<buffers.count {
-        let s = context.scratch[i < context.scratch.count ? i : 0]
-        if i < context.ringBuffers.count {
-            let bytesRead = context.ringBuffers[i].read(s, byteCount: frames * bytesPerFrame)
-            buffers[i].mData = s
-            buffers[i].mDataByteSize = UInt32(bytesRead)
+        if i < context.scratch.count {
+            let s = context.scratch[i]
+            if i < context.ringBuffers.count {
+                let bytesRead = context.ringBuffers[i].read(s, byteCount: frames * bytesPerFrame)
+                buffers[i].mData = s
+                buffers[i].mDataByteSize = UInt32(bytesRead)
+            } else {
+                memset(s, 0, frames * bytesPerFrame)
+                buffers[i].mData = s
+                buffers[i].mDataByteSize = UInt32(frames * bytesPerFrame)
+            }
         } else {
-            memset(s, 0, frames * bytesPerFrame)
-            buffers[i].mData = s
-            buffers[i].mDataByteSize = UInt32(frames * bytesPerFrame)
+            buffers[i].mData = dummyScratch
+            buffers[i].mDataByteSize = UInt32(min(frames * bytesPerFrame, 262144))
         }
         buffers[i].mNumberChannels = UInt32(context.channelsPerBuffer)
     }

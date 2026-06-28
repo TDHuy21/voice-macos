@@ -125,10 +125,12 @@ final class BreakTimerManagerObservableWrapper: ObservableObject {
 
         // Poll at 0.5s — lightweight and sufficient for a countdown display.
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            // Already on main thread (timer fires on RunLoop.main).
-            self.remaining = manager.remaining
-            self.phase = manager.phase
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                // Already on main thread (timer fires on RunLoop.main).
+                self.remaining = manager.remaining
+                self.phase = manager.phase
+            }
         }
     }
 
@@ -151,6 +153,10 @@ public final class BreakOverlayController {
     public init(manager: BreakTimerManager) {
         self.manager = manager
         setupScreenChangeObserver()
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     // MARK: Public API (BreakOverlayControllerProtocol)

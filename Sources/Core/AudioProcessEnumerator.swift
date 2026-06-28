@@ -10,6 +10,8 @@ public class AudioProcessEnumerator: @unchecked Sendable {
     
     @ObservationIgnored nonisolated(unsafe) private var isListening = false
     @ObservationIgnored nonisolated(unsafe) private var listenerPointer: UnsafeMutableRawPointer? = nil
+    @ObservationIgnored nonisolated(unsafe) private var launchObserverToken: NSObjectProtocol?
+    @ObservationIgnored nonisolated(unsafe) private var terminateObserverToken: NSObjectProtocol?
     
     private let systemObjectID = AudioObjectID(kAudioObjectSystemObject)
     
@@ -26,8 +28,14 @@ public class AudioProcessEnumerator: @unchecked Sendable {
     }
     
     deinit {
-        // Core Audio listener removal must be done carefully.
-        // We capture parameters needed to clean it up since deinit runs on the deallocating thread.
+        let center = NSWorkspace.shared.notificationCenter
+        if let token = launchObserverToken {
+            center.removeObserver(token)
+        }
+        if let token = terminateObserverToken {
+            center.removeObserver(token)
+        }
+
         let wasListening = isListening
         let pointer = listenerPointer
         let systemId = systemObjectID
@@ -39,8 +47,7 @@ public class AudioProcessEnumerator: @unchecked Sendable {
                 mScope: kAudioObjectPropertyScopeGlobal,
                 mElement: kAudioObjectPropertyElementMain
             )
-            let listenerProc: AudioObjectPropertyListenerProc = { _, _, _, _ in noErr }
-            AudioObjectRemovePropertyListener(systemId, &address, listenerProc, ptr)
+            AudioObjectRemovePropertyListener(systemId, &address, AudioProcessEnumerator.listenerProc, ptr)
         }
     }
     
@@ -207,18 +214,27 @@ public class AudioProcessEnumerator: @unchecked Sendable {
 
     private func setupNotifications() {
         let center = NSWorkspace.shared.notificationCenter
-        center.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] _ in
+        launchObserverToken = center.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self = self else { return }
             Task { @MainActor in
                 self.refresh()
             }
         }
-        center.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
+        terminateObserverToken = center.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self = self else { return }
             Task { @MainActor in
                 self.refresh()
             }
         }
+    }
+    
+    nonisolated private static let listenerProc: AudioObjectPropertyListenerProc = { _, _, _, inClientData in
+        guard let clientData = inClientData else { return noErr }
+        let enumerator = Unmanaged<AudioProcessEnumerator>.fromOpaque(clientData).takeUnretainedValue()
+        Task { @MainActor in
+            enumerator.refresh()
+        }
+        return noErr
     }
     
     private func setupCoreAudioListener() {
@@ -229,16 +245,7 @@ public class AudioProcessEnumerator: @unchecked Sendable {
         )
         
         let clientData = Unmanaged.passUnretained(self).toOpaque()
-        let listenerProc: AudioObjectPropertyListenerProc = { inObjectID, inNumberAddresses, inAddresses, inClientData in
-            guard let clientData = inClientData else { return noErr }
-            let enumerator = Unmanaged<AudioProcessEnumerator>.fromOpaque(clientData).takeUnretainedValue()
-            Task { @MainActor in
-                enumerator.refresh()
-            }
-            return noErr
-        }
-        
-        let status = AudioObjectAddPropertyListener(systemObjectID, &address, listenerProc, clientData)
+        let status = AudioObjectAddPropertyListener(systemObjectID, &address, AudioProcessEnumerator.listenerProc, clientData)
         if status == noErr {
             isListening = true
             listenerPointer = clientData
