@@ -62,3 +62,31 @@ Bổ sung các nút bấm chọn nhanh thời lượng (ví dụ: +15 phút, +30
 ### Kỹ thuật & Biên dịch
 - [ ] Dự án biên dịch thành công không có lỗi thông qua lệnh `./scripts/build_app.sh`.
 - [ ] Không phát sinh lỗi liên quan đến quản lý trạng thái UI hoặc vòng lặp cập nhật.
+
+## Follow-up — 2026-06-28T07:51:01Z
+
+Sửa lỗi mất âm thanh của các ứng dụng phát nhạc (như Spotify) khi thay đổi thiết bị đầu ra mặc định (Default Output Device) bằng cách xử lý sự kiện cấu hình thay đổi của AVAudioEngine.
+
+Working directory: /Users/mac/Documents/GitHub/soundssource
+Integrity mode: benchmark
+
+## Requirements
+
+### R1. Xử lý AVAudioEngineConfigurationChange để tự động khôi phục ngầm
+Đăng ký lắng nghe thông báo `NSNotification.Name.AVAudioEngineConfigurationChange` cho từng thực thể `AVAudioEngine` được quản lý bởi `OutputDeviceEngine`.
+Khi nhận được thông báo thay đổi cấu hình (do thay đổi thiết bị hệ thống, thay đổi xung nhịp sample rate, v.v.):
+- Thực hiện dừng engine.
+- Tự động dựng lại các kết nối đồ thị âm thanh (reconnect nodes) một cách êm ái cho toàn bộ các ứng dụng đang được định tuyến đến thiết bị đó (recreate AppAudioNode để cập nhật tỷ lệ chuyển đổi định dạng âm thanh phù hợp với thiết bị mới).
+- Khởi động lại engine ngầm mà không gây tiếng ồn hay ngắt dòng âm thanh của người dùng.
+
+### R2. Đảm bảo an toàn giải phóng bộ nhớ
+Đảm bảo giải phóng observer đúng cách trong hàm hủy `deinit` của `OutputDeviceEngine` để tránh rò rỉ bộ nhớ hoặc gây crash khi ứng dụng đóng.
+
+## Acceptance Criteria
+
+### Tính năng
+- [ ] Khi thay đổi thiết bị đầu ra mặc định của hệ thống, các ứng dụng đang được định tuyến riêng biệt (như Spotify được định tuyến đến một thiết bị cụ thể) vẫn tự động kết nối lại ngầm và tiếp tục phát nhạc bình thường mà không bị ngắt hoặc lỗi âm thanh.
+- [ ] Các ứng dụng định tuyến theo mặc định (Default) được di trú (migrate) chính xác sang thiết bị mặc định mới và tiếp tục phát nhạc.
+
+### Biên dịch & Kiểm thử
+- [ ] Biên dịch dự án thành công không lỗi thông qua lệnh `./scripts/build_app.sh`.

@@ -12,13 +12,28 @@ private class OutputDeviceEngine {
     
     var nextBus: AVAudioNodeBus = 0
     var freeBuses: [AVAudioNodeBus] = []
+    private var configChangeObserver: NSObjectProtocol?
     
     init(deviceID: AudioDeviceID) {
         self.deviceID = deviceID
         setup()
     }
     
-    private func setup() {
+    fileprivate func setup() {
+        if configChangeObserver == nil {
+            let id = deviceID
+            configChangeObserver = NotificationCenter.default.addObserver(
+                forName: .AVAudioEngineConfigurationChange,
+                object: engine,
+                queue: .main
+            ) { _ in
+                print("OutputDeviceEngine: Received AVAudioEngineConfigurationChange notification for device \(id)")
+                Task { @MainActor in
+                    AudioEngineManager.shared.handleEngineConfigurationChange(for: id)
+                }
+            }
+        }
+
         // Accessing engine.outputNode lazily instantiates the output node and its
         // AudioUnit, so audioUnit is non-nil and the device property takes effect
         // before we query the format below.
@@ -65,10 +80,13 @@ private class OutputDeviceEngine {
     }
     
     deinit {
-        if engine.isRunning {
-            engine.stop()
+            if let observer = configChangeObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            if engine.isRunning {
+                engine.stop()
+            }
         }
-    }
 }
 
 @available(macOS 14.2, *)
@@ -116,6 +134,7 @@ public class AudioEngineManager: @unchecked Sendable {
     // Used by system-default-changed listener to update selectedDeviceID without
     // marking it as a user-explicit pick.
     private var _suppressFollowReset = false
+    private var isReconfiguringEngines = false
     
     // Configured output routing: Bundle ID -> AudioDeviceID (kAudioObjectUnknown = Default)
     public private(set) var appOutputDevices: [String: AudioDeviceID] = [:]
@@ -253,6 +272,7 @@ public class AudioEngineManager: @unchecked Sendable {
 
         ProcessTapManager.shared.stopTapping(bundleID: bundleID)
         print("AudioEngineManager: Detached and stopped tapping \(bundleID) from engine device \(route.deviceID)")
+        purgeUnusedEngines()
     }
     
     // Per-app output routing setter
@@ -288,6 +308,7 @@ public class AudioEngineManager: @unchecked Sendable {
                 migrateActiveNode(bundleID: bundleID, fromDevice: oldDeviceID, toDevice: newDeviceID)
             }
         }
+        purgeUnusedEngines()
     }
     
     private func migrateActiveNode(bundleID: String, fromDevice: AudioDeviceID, toDevice: AudioDeviceID) {
@@ -364,6 +385,7 @@ public class AudioEngineManager: @unchecked Sendable {
         newAppNode.volume = muted ? 0.0 : oldVol
         
         print("AudioEngineManager: Successfully routed \(bundleID) to device \(actualNewDeviceID) bus \(bus)")
+        purgeUnusedEngines()
     }
     
     // VU Meter Level Pull (Placeholder)
@@ -508,6 +530,7 @@ public class AudioEngineManager: @unchecked Sendable {
         if self.selectedDeviceID == kAudioObjectUnknown {
             self.selectedDeviceID = self.getDefaultOutputDeviceID()
         }
+        purgeUnusedEngines()
     }
     
     private func getDefaultOutputDeviceID() -> AudioDeviceID {
@@ -564,20 +587,65 @@ public class AudioEngineManager: @unchecked Sendable {
         guard let data = inClientData else { return noErr }
         let mgr = Unmanaged<AudioEngineManager>.fromOpaque(data).takeUnretainedValue()
         Task { @MainActor in
-            guard mgr.followsSystemDefault else {
-                print("AudioEngineManager: System default changed but user has explicit pick — ignoring")
-                return
-            }
             let sysDefault = mgr.getDefaultOutputDeviceID()
             if mgr.selectedDeviceID != sysDefault {
                 print("AudioEngineManager: Following system default device change → \(sysDefault)")
                 mgr._suppressFollowReset = true
                 mgr.selectedDeviceID = sysDefault
                 mgr._suppressFollowReset = false
-                mgr.followsSystemDefault = true
             }
         }
         return noErr
+    }
+
+    private func purgeUnusedEngines() {
+        let activeDeviceIDs = Set(outputDevices.map { $0.deviceID })
+        let routedDeviceIDs = Set(appBusRoutes.values.map { $0.deviceID })
+        
+        var keysToRemove: [AudioDeviceID] = []
+        for (deviceID, _) in engines {
+            let isCurrentOutputDevice = activeDeviceIDs.contains(deviceID)
+            let isSelectedDevice = (deviceID == selectedDeviceID)
+            let isInUseByApp = routedDeviceIDs.contains(deviceID)
+            
+            if !isCurrentOutputDevice && !isSelectedDevice && !isInUseByApp {
+                keysToRemove.append(deviceID)
+            }
+        }
+        
+        for deviceID in keysToRemove {
+            if let devEngine = engines.removeValue(forKey: deviceID) {
+                if devEngine.engine.isRunning {
+                    devEngine.engine.stop()
+                }
+                print("AudioEngineManager: Purged unused engine for device \(deviceID)")
+            }
+        }
+    }
+    
+    public func handleEngineConfigurationChange(for deviceID: AudioDeviceID) {
+        guard !isReconfiguringEngines else {
+            print("AudioEngineManager: Already reconfiguring engines, ignoring nested config change for device \(deviceID)")
+            return
+        }
+        isReconfiguringEngines = true
+        defer { isReconfiguringEngines = false }
+        
+        print("AudioEngineManager: Handling engine configuration change for device \(deviceID)")
+        
+        // Find all active apps routed to this deviceID
+        let bundleIDsToReconnect = appBusRoutes.filter { $0.value.deviceID == deviceID }.map { $0.key }
+        
+        if let devEngine = engines[deviceID] {
+            if devEngine.engine.isRunning {
+                devEngine.engine.stop()
+            }
+            devEngine.setup()
+        }
+        
+        for bundleID in bundleIDsToReconnect {
+            routeActiveNode(bundleID: bundleID, fromDevice: deviceID, toDevice: deviceID)
+        }
     }
 
     private func setupListeners() {

@@ -86,6 +86,7 @@ public final class BreakTimerManager {
 
     private var timer: DispatchSourceTimer?
     private var watchdogTimer: DispatchSourceTimer?
+    private var warningFlashTimer: DispatchSourceTimer?
 
     /// Absolute deadline for the *end* of the current phase.
     private var deadline: Date = .distantFuture
@@ -238,6 +239,8 @@ public final class BreakTimerManager {
     private func cancelTimers() {
         cancelHeartbeat()
         cancelWatchdog()
+        warningFlashTimer?.cancel()
+        warningFlashTimer = nil
     }
 
     private func tick() {
@@ -382,16 +385,23 @@ public final class BreakTimerManager {
         // Flash the status item 3 times to surface the warning even when popover is closed.
         // Use a DispatchSource on the main queue to avoid Sendable capture issues with
         // a mutable `count` var (Swift 6).
+        warningFlashTimer?.cancel()
+        
         var count = 0
         let src = DispatchSource.makeTimerSource(queue: .main)
         src.schedule(deadline: .now() + 0.4, repeating: 0.4, leeway: .milliseconds(50))
         src.setEventHandler { [weak self] in
-            guard let self else { src.cancel(); return }
+            guard let self else { return }
             count += 1
             let show = count % 2 == 1
             self.onStatusItemUpdate?(show ? "⚠️ NGHỈ SẮP TỚI!" : "")
-            if count >= 6 { src.cancel(); self.updateStatusItem() }
+            if count >= 6 {
+                self.warningFlashTimer?.cancel()
+                self.warningFlashTimer = nil
+                self.updateStatusItem()
+            }
         }
+        warningFlashTimer = src
         src.resume()
     }
 

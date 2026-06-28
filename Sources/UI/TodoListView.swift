@@ -45,21 +45,48 @@ public struct TodoListView: View {
         }
     }
 
+    private func defaultScheduleTimes() -> (start: Date, end: Date) {
+        let scheduledToday = store.todaysTasks.compactMap { store.effectiveScheduleToday($0) }
+        if let maxEnd = scheduledToday.map({ $0.end }).max(), maxEnd > Date() {
+            return (start: maxEnd, end: maxEnd.addingTimeInterval(3600))
+        } else {
+            return (start: Date(), end: Date().addingTimeInterval(3600))
+        }
+    }
+
     public var body: some View {
         ZStack(alignment: .top) {
             VStack(spacing: 0) {
                 // Header
-                HStack {
+                HStack(alignment: .firstTextBaseline) {
                     Text("📝 Hôm nay")
                         .font(DSFont.wordmark)
                         .foregroundStyle(DS.textPrimary)
                     Spacer()
+                    
+                    let completed = store.todaysTasks.filter { $0.isDone }.count
+                    let total = store.todaysTasks.count
+                    Text("\(completed)/\(total) hoàn thành")
+                        .font(DSFont.caption)
+                        .foregroundStyle(DS.textSecondary)
                 }
                 .padding(.horizontal, DS.l)
-                .padding(.vertical, DS.m + 5)
+                .padding(.top, DS.m + 5)
+                .padding(.bottom, DS.s)
                 .background(DS.surface)
                 
-                Rectangle().fill(DS.stroke).frame(height: DS.borderWidth)
+                let ratio = store.todaysTasks.isEmpty ? 0.0 : Double(store.todaysTasks.filter { $0.isDone }.count) / Double(store.todaysTasks.count)
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Rectangle()
+                            .fill(DS.bg)
+                        Rectangle()
+                            .fill(DS.playing)
+                            .frame(width: geo.size.width * ratio)
+                            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: ratio)
+                    }
+                }
+                .frame(height: 3)
 
                 // Scrollable list
                 ScrollView {
@@ -132,7 +159,7 @@ public struct TodoListView: View {
                             }
                         }) {
                             Image(systemName: showTimeConfig ? "clock.fill" : "clock")
-                                .font(.system(size: 13, weight: .bold))
+                                .font(.system(size: 12, weight: .bold))
                                 .foregroundStyle(showTimeConfig ? DS.accent : DS.textSecondary)
                                 .padding(6)
                                 .background(showTimeConfig ? DS.surfaceHi : Color.clear)
@@ -143,30 +170,23 @@ public struct TodoListView: View {
 
                         Button(action: commitNewTask) {
                             Image(systemName: "plus")
-                                .font(.system(size: 13, weight: .black))
-                                .foregroundStyle(DS.textPrimary)
-                                .padding(DS.s)
+                                .font(.system(size: 11, weight: .black))
+                                .foregroundStyle(DS.surface)
+                                .padding(6)
                                 .background(DS.accentPink)
                                 .clipShape(Circle())
-                                .overlay(
-                                    Circle()
-                                        .strokeBorder(DS.stroke, lineWidth: DS.borderWidth)
-                                )
-                                .cartoonShadow(radius: 6)
                         }
                         .buttonStyle(.plain)
-                        .hoverEffectHelper()
                         .accessibilityLabel("Add task")
                     }
-                    .padding(.horizontal, DS.s)
+                    .padding(.horizontal, DS.m)
                     .padding(.vertical, DS.s)
                     .background(DS.surface)
                     .clipShape(RoundedRectangle(cornerRadius: DS.radiusS))
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.radiusS)
-                            .strokeBorder(DS.stroke, lineWidth: DS.borderWidth)
+                            .strokeBorder(DS.stroke, lineWidth: 1)
                     )
-                    .cartoonShadow(radius: DS.radiusS)
 
                     // Time Picker Config Panel
                     if showTimeConfig || isInputFocused {
@@ -200,6 +220,7 @@ public struct TodoListView: View {
                                     Button(action: {
                                         withAnimation {
                                             taskEnd = taskStart.addingTimeInterval(minutes * 60)
+                                            showTimeConfig = true
                                         }
                                     }) {
                                         Text(label)
@@ -224,9 +245,8 @@ public struct TodoListView: View {
                         .clipShape(RoundedRectangle(cornerRadius: DS.radiusS))
                         .overlay(
                             RoundedRectangle(cornerRadius: DS.radiusS)
-                                .strokeBorder(DS.stroke, lineWidth: DS.borderWidth)
+                                .strokeBorder(DS.stroke, lineWidth: 1)
                         )
-                        .cartoonShadow(radius: DS.radiusS)
                         .transition(.asymmetric(
                             insertion: .opacity.combined(with: .move(edge: .top)),
                             removal: .opacity.combined(with: .move(edge: .top))
@@ -244,18 +264,35 @@ public struct TodoListView: View {
                 .padding(.horizontal, DS.m)
                 .padding(.vertical, DS.s)
                 .background(DS.surface)
-                .onChange(of: isInputFocused) { _, _ in
+                .onChange(of: isInputFocused) { _, newValue in
+                    if newValue && newTodoTitle.isEmpty {
+                        let times = defaultScheduleTimes()
+                        taskStart = times.start
+                        taskEnd = times.end
+                    }
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                         // Smoothly expand/collapse
                     }
                 }
                 .onChange(of: showTimeConfig) { _, newValue in
                     if newValue {
-                        taskStart = Date()
-                        taskEnd = Date().addingTimeInterval(3600)
+                        let times = defaultScheduleTimes()
+                        taskStart = times.start
+                        taskEnd = times.end
                         newTodoErrorMessage = ""
                     }
                 }
+                .onChange(of: taskStart) { _, _ in
+                    showTimeConfig = true
+                }
+                .onChange(of: taskEnd) { _, _ in
+                    showTimeConfig = true
+                }
+            }
+            .onAppear {
+                let times = defaultScheduleTimes()
+                taskStart = times.start
+                taskEnd = times.end
             }
             
             if showCongratsToast {
@@ -366,9 +403,25 @@ struct TodoRowView: View {
         HStack(spacing: DS.s) {
             // Checkmark button
             Button(action: onToggle) {
-                Image(systemName: item.isDone ? "checkmark.circle.fill" : (item.status == .blocked ? "multiply.circle.fill" : "circle"))
-                    .font(.system(size: 16, weight: .black))
-                    .foregroundStyle(item.isDone ? DS.playing : (item.status == .blocked ? DS.danger : DS.textSecondary))
+                ZStack {
+                    Circle()
+                        .strokeBorder(item.isDone ? DS.playing : (item.status == .blocked ? DS.danger : DS.textSecondary), lineWidth: 2)
+                        .background(
+                            Circle()
+                                .fill(item.isDone ? DS.playing : (item.status == .blocked ? DS.danger.opacity(0.15) : Color.clear))
+                        )
+                        .frame(width: 16, height: 16)
+                    
+                    if item.isDone {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 8, weight: .black))
+                            .foregroundStyle(DS.surface)
+                    } else if item.status == .blocked {
+                        Image(systemName: "multiply")
+                            .font(.system(size: 8, weight: .black))
+                            .foregroundStyle(DS.danger)
+                    }
+                }
             }
             .buttonStyle(.plain)
             .accessibilityLabel(item.isDone ? "Uncheck task" : "Check task")
@@ -387,7 +440,7 @@ struct TodoRowView: View {
                         return .handled
                     }
             } else {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(item.title)
                         .font(DSFont.rowTitle)
                         .foregroundStyle(item.isDone ? DS.textTertiary : (item.status == .blocked ? DS.danger : DS.textPrimary))
@@ -396,17 +449,17 @@ struct TodoRowView: View {
                         .multilineTextAlignment(.leading)
                     
                     if let schedule = TodoStore.shared.effectiveScheduleToday(item) {
-                        Text(schedule.formattedTimeString)
-                            .font(DSFont.caption)
-                            .foregroundStyle(item.status == .blocked ? DS.danger : DS.textSecondary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1)
-                            .background(item.status == .blocked ? DS.danger.opacity(0.15) : DS.bg)
-                            .clipShape(RoundedRectangle(cornerRadius: 3))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 3)
-                                    .strokeBorder(item.status == .blocked ? DS.danger.opacity(0.3) : DS.stroke, lineWidth: 1)
-                            )
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock")
+                                .font(.system(size: 9, weight: .bold))
+                            Text(schedule.formattedTimeString)
+                                .font(DSFont.caption)
+                        }
+                        .foregroundStyle(item.status == .blocked ? DS.danger : DS.accentPink)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(item.status == .blocked ? DS.danger.opacity(0.12) : DS.accentPink.opacity(0.12))
+                        .clipShape(Capsule())
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -421,103 +474,116 @@ struct TodoRowView: View {
 
             Spacer()
 
-            if isHovered && !isEditing {
-                HStack(spacing: DS.s) {
-                    if !item.isDone {
-                        // Clock button
-                        Button(action: {
-                            if let s = TodoStore.shared.effectiveScheduleToday(item) {
-                                scheduleStart = s.start
-                                scheduleEnd = s.end
-                            } else {
-                                scheduleStart = Date()
-                                scheduleEnd = Date().addingTimeInterval(3600)
-                            }
-                            errorMessage = ""
-                            showSchedulePicker = true
-                        }) {
-                            Image(systemName: "clock")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(DS.textSecondary)
+            HStack(spacing: DS.s) {
+                if !item.isDone && !isEditing {
+                    // Clock button always visible for active tasks
+                    Button(action: {
+                        if let s = TodoStore.shared.effectiveScheduleToday(item) {
+                            scheduleStart = s.start
+                            scheduleEnd = s.end
+                        } else {
+                            scheduleStart = Date()
+                            scheduleEnd = Date().addingTimeInterval(3600)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Set task schedule")
-                        .popover(isPresented: $showSchedulePicker, arrowEdge: .trailing) {
-                            VStack(spacing: DS.s) {
-                                Text("Đặt thời gian")
-                                    .font(DSFont.control)
-                                    .foregroundStyle(DS.textPrimary)
-                                
-                                DatePicker("Bắt đầu", selection: $scheduleStart, displayedComponents: .hourAndMinute)
-                                    .datePickerStyle(.field)
-                                    .labelsHidden()
-                                    .accessibilityLabel("Start time picker")
-                                    
-                                DatePicker("Kết thúc", selection: $scheduleEnd, displayedComponents: .hourAndMinute)
-                                    .datePickerStyle(.field)
-                                    .labelsHidden()
-                                    .accessibilityLabel("End time picker")
-                                    
-                                if !errorMessage.isEmpty {
-                                    Text(errorMessage)
-                                        .font(DSFont.caption)
-                                        .foregroundStyle(DS.danger)
-                                }
-                                
-                                HStack(spacing: DS.s) {
-                                    Button("Xoá") {
-                                        onClearSchedule()
-                                        showSchedulePicker = false
-                                    }
-                                    .buttonStyle(.borderless)
-                                    .foregroundStyle(DS.danger)
-                                    
-                                    Spacer()
-                                    
-                                    Button("Huỷ") {
-                                        showSchedulePicker = false
-                                    }
-                                    .buttonStyle(.borderless)
-                                    
-                                    Button("Lưu") {
-                                        let calendar = Calendar.current
-                                        let today = TodoStore.shared.todayAnchor
-                                        
-                                        let startComponents = calendar.dateComponents([.hour, .minute], from: scheduleStart)
-                                        let endComponents = calendar.dateComponents([.hour, .minute], from: scheduleEnd)
-                                        
-                                        guard let finalStart = calendar.date(bySettingHour: startComponents.hour ?? 0, minute: startComponents.minute ?? 0, second: 0, of: today),
-                                              let finalEnd = calendar.date(bySettingHour: endComponents.hour ?? 0, minute: endComponents.minute ?? 0, second: 0, of: today) else {
-                                            errorMessage = "Lỗi ngày"
-                                            return
-                                        }
-                                        
-                                        if finalEnd <= finalStart {
-                                            errorMessage = "Giờ kết thúc phải sau giờ bắt đầu"
-                                            return
-                                        }
-                                        
-                                        onSetSchedule(finalStart, finalEnd)
-                                        showSchedulePicker = false
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                    .tint(DS.accentPink)
-                                }
-                                .font(DSFont.caption)
-                            }
-                            .padding(DS.m)
-                            .frame(width: 220)
-                            .background(DS.surface)
-                        }
-
-                        Button(action: onToggleBlocked) {
-                            Image(systemName: item.status == .blocked ? "multiply.circle.fill" : "multiply.circle")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(DS.danger)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(item.status == .blocked ? "Unblock task" : "Block task")
+                        errorMessage = ""
+                        showSchedulePicker = true
+                    }) {
+                        Image(systemName: item.schedule != nil ? "clock.fill" : "clock")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(item.schedule != nil ? DS.accent : DS.textSecondary)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Set task schedule")
+                    .popover(isPresented: $showSchedulePicker, arrowEdge: .trailing) {
+                        VStack(spacing: DS.s) {
+                            Text("Đặt thời gian")
+                                .font(DSFont.control)
+                                .foregroundStyle(DS.textPrimary)
+                            
+                            DatePicker("Bắt đầu", selection: $scheduleStart, displayedComponents: .hourAndMinute)
+                                .datePickerStyle(.field)
+                                .labelsHidden()
+                                .accessibilityLabel("Start time picker")
+                                
+                            DatePicker("Kết thúc", selection: $scheduleEnd, displayedComponents: .hourAndMinute)
+                                .datePickerStyle(.field)
+                                .labelsHidden()
+                                .accessibilityLabel("End time picker")
+                                
+                            // Quick-presets inside popover
+                            HStack(spacing: DS.xs) {
+                                ForEach([("+30m", 30.0), ("+1h", 60.0), ("+2h", 120.0)], id: \.0) { label, minutes in
+                                    Button(label) {
+                                        withAnimation {
+                                            scheduleEnd = scheduleStart.addingTimeInterval(minutes * 60)
+                                        }
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .controlSize(.mini)
+                                }
+                            }
+                            
+                            if !errorMessage.isEmpty {
+                                Text(errorMessage)
+                                    .font(DSFont.caption)
+                                    .foregroundStyle(DS.danger)
+                            }
+                            
+                            HStack(spacing: DS.s) {
+                                Button("Xoá") {
+                                    onClearSchedule()
+                                    showSchedulePicker = false
+                                }
+                                .buttonStyle(.borderless)
+                                .foregroundStyle(DS.danger)
+                                
+                                Spacer()
+                                
+                                Button("Huỷ") {
+                                    showSchedulePicker = false
+                                }
+                                .buttonStyle(.borderless)
+                                
+                                Button("Lưu") {
+                                    let calendar = Calendar.current
+                                    let today = TodoStore.shared.todayAnchor
+                                    
+                                    let startComponents = calendar.dateComponents([.hour, .minute], from: scheduleStart)
+                                    let endComponents = calendar.dateComponents([.hour, .minute], from: scheduleEnd)
+                                    
+                                    guard let finalStart = calendar.date(bySettingHour: startComponents.hour ?? 0, minute: startComponents.minute ?? 0, second: 0, of: today),
+                                          let finalEnd = calendar.date(bySettingHour: endComponents.hour ?? 0, minute: endComponents.minute ?? 0, second: 0, of: today) else {
+                                        errorMessage = "Lỗi ngày"
+                                        return
+                                    }
+                                    
+                                    if finalEnd <= finalStart {
+                                        errorMessage = "Giờ kết thúc phải sau giờ bắt đầu"
+                                        return
+                                    }
+                                    
+                                    onSetSchedule(finalStart, finalEnd)
+                                    showSchedulePicker = false
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(DS.accentPink)
+                            }
+                            .font(DSFont.caption)
+                        }
+                        .padding(DS.m)
+                        .frame(width: 220)
+                        .background(DS.surface)
+                    }
+                }
+
+                if isHovered && !isEditing {
+                    Button(action: onToggleBlocked) {
+                        Image(systemName: item.status == .blocked ? "multiply.circle.fill" : "multiply.circle")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(DS.danger)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(item.status == .blocked ? "Unblock task" : "Block task")
 
                     Button(action: onDelete) {
                         Image(systemName: "trash")
@@ -530,14 +596,13 @@ struct TodoRowView: View {
             }
         }
         .padding(.horizontal, DS.m)
-        .padding(.vertical, DS.s + 1)
-        .background(isHovered ? DS.cardBgHover : DS.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: DS.radiusS))
-        .overlay(
+        .padding(.vertical, DS.s)
+        .background(
             RoundedRectangle(cornerRadius: DS.radiusS)
-                .strokeBorder(DS.stroke, lineWidth: DS.borderWidth)
+                .fill(isHovered ? DS.surfaceHi : DS.surface)
         )
-        .cartoonShadow(radius: DS.radiusS)
+        .padding(.horizontal, DS.s)
+        .padding(.vertical, DS.xs)
         .onHover { hover in
             isHovered = hover
         }
